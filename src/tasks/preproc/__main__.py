@@ -212,7 +212,8 @@ def process_lightcurve_data(star_df, phase_interval=0.005, interpolation_method=
 
 def plot_raw_lightcurves(star_df, output_dir):
     """
-    Plot raw light curves (magnitude vs. time) for each star.
+    Plot raw light curves (magnitude vs. time) for each star,
+    differentiating between good data (catflags=0) and bad data (catflags≠0).
     
     Args:
         star_df: DataFrame with two-level index (ps1_objid, datetime)
@@ -227,26 +228,39 @@ def plot_raw_lightcurves(star_df, output_dir):
     print(f"Plotting raw light curves for {len(star_ids)} stars...")
     
     for star_id in star_ids:
-        # Get data for this star
-        star_data = star_df.loc[star_id]
+        # Get data for this star and reset index to access catflags
+        star_data = star_df.loc[star_id].reset_index()
         
         # Get class from the first row
         class_id = star_data['star_class'].iloc[0]
         
+        # Separate good and bad data points
+        good_data = star_data[star_data['catflags'] == 0]
+        bad_data = star_data[star_data['catflags'] != 0]
+        
         # Create plot
         plt.figure(figsize=(10, 6))
         
-        # Plot magnitude vs. time
-        plt.errorbar(star_data['mjd'] % star_data['period'], star_data['mag'], yerr=star_data['magerr'], 
-                     fmt='o', color='blue', alpha=0.7, markersize=4, capsize=2)
+        # Plot good data points (blue)
+        if not good_data.empty:
+            plt.errorbar(good_data['mjd'] % good_data['period'].iloc[0], good_data['mag'], 
+                         yerr=good_data['magerr'], fmt='o', color='blue', alpha=0.7, 
+                         markersize=4, capsize=2, label='Good data (catflags=0)')
+        
+        # Plot bad data points (red)
+        if not bad_data.empty:
+            plt.errorbar(bad_data['mjd'] % bad_data['period'].iloc[0], bad_data['mag'], 
+                         yerr=bad_data['magerr'], fmt='x', color='red', alpha=0.7, 
+                         markersize=4, capsize=2, label='Bad data (catflags≠0)')
         
         # Set labels and title
-        plt.xlabel('Days from first observation')
+        plt.xlabel('Phase (days)')
         plt.ylabel('Magnitude')
         plt.title(f"Star {star_id} (Class {class_id}) - Raw Light Curve")
         
-        # Invert y-axis (astronomical convention: brighter stars have lower magnitudes)
-        # plt.gca().invert_yaxis()
+        # Add legend if both types of data are present
+        if not good_data.empty or not bad_data.empty:
+            plt.legend()
         
         # Save the plot
         class_dir = os.path.join(plot_dir, f"class_{class_id}")
@@ -307,6 +321,34 @@ def plot_processed_lightcurves(processed_df, output_dir):
     
     print(f"Light curve plots saved to {plot_dir}")
 
+def filter_bad_flags(star_df):
+    """
+    Filter out rows with non-zero catflags (bad data flags).
+    
+    Args:
+        star_df: DataFrame with two-level index (ps1_objid, datetime)
+        
+    Returns:
+        pd.DataFrame: Filtered DataFrame with bad flag data removed
+    """
+    print("Filtering out rows with non-zero catflags...")
+    
+    # Reset index to access the catflags column
+    star_df_reset = star_df.reset_index()
+    
+    # Find indices of good data (catflags == 0)
+    good_idx = np.where(np.array(star_df_reset['catflags'])==0)[0]
+    
+    # Create filtered DataFrame
+    star_df_filtered = star_df_reset.iloc[good_idx]
+    
+    # Set multi-level index and sort
+    star_df_filtered = star_df_filtered.set_index(['ps1_objid', 'datetime']).sort_index()
+    
+    print(f"Removed {len(star_df_reset) - len(star_df_filtered)} rows with bad flags out of {len(star_df_reset)} total rows.")
+    
+    return star_df_filtered
+
 def main(args):
     """
     Main function to preprocess light curve data.
@@ -343,9 +385,12 @@ def main(args):
     print(f"Creating indexed DataFrame for {len(star_ids)} stars...")
     star_df = create_indexed_star_df(star_ids, band=args.band, data_path=args.input_file)
     
+    # Filter out bad flag data
+    filtered_star_df = filter_bad_flags(star_df)
+
     # Process the data
     print(f"Processing light curve data...")
-    processed_df = process_lightcurve_data(star_df, interpolation_method="LastValue", 
+    processed_df = process_lightcurve_data(filtered_star_df, interpolation_method="LastValue", 
                                          phase_interval=0.0025)
     
     # Save the processed data
@@ -354,8 +399,10 @@ def main(args):
     
     # Plot the processed data if requested
     if args.plot:
-        plot_raw_lightcurves(star_df, args.output_dir)
-        plot_processed_lightcurves(processed_df, args.output_dir)
+        few_stars = star_df.loc[star_df.index.get_level_values(0).unique()[:10]]
+        plot_raw_lightcurves(few_stars, args.output_dir)
+        few_processed_stars = processed_df.loc[processed_df.index.get_level_values(0).unique()[:10]]
+        plot_processed_lightcurves(few_processed_stars, args.output_dir)
 
     # Print some information about the processed data
     print("\nSummary of processed data:")
