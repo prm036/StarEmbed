@@ -125,6 +125,7 @@ if __name__ == "__main__":
 
     # call the function in need
     # ...
+    cal_scope_data_size(output_dir)
 
     
 

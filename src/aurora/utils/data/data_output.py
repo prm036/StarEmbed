@@ -21,7 +21,9 @@ def output_hf_dataset(dataset_records: List[Dict]):
         "feat_dynamic_real": Sequence(Value("float32")),
         "period": Value("float32"),
         "ps1_objid": Value("string"),
-        "mjd": Sequence(Value("float32"))
+        "mjd": Sequence(Value("float32")),
+        "class": Value("string"),
+        "csdr1_id": Value("string")
     })
     
     dataset = Dataset.from_list(dataset_records, features=features)
