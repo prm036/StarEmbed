@@ -97,7 +97,7 @@ def compile_handcrafted_features(data):
         ['r_'+feat_name for feat_name in LC_extractor.names]
     LC_features = pd.DataFrame(columns=LC_columns)
 
-    for star_idx in range(2):
+    for star_idx in range(len(data)):
         star = data[star_idx]
 
         g_FATS_feats = calc_FATS_features(star['bands_data']['g'])
@@ -116,8 +116,11 @@ if __name__ == "__main__":
     dataset_path = "/projects/p32795/hongyu/hf_csdr1_multiband_raw_lc_subclass_class_str_v2"
     dataset = load_from_disk(dataset_path)
 
-    hc_feats_train = compile_handcrafted_features(dataset['train'])
-    hc_feats_train.to_csv(f"../../data/hc_feats_train_{os.path.basename(dataset_path).csv}")
+    # hc_feats_train = compile_handcrafted_features(dataset['train'])
+    # hc_feats_train.to_csv(f"../../data/hc_feats_train_{os.path.basename(dataset_path)}.csv")
 
-    # compile_handcrafted_features(dataset['val'])
-    # compile_handcrafted_features(dataset['test'])
+    hc_feats_train = compile_handcrafted_features(dataset['validation'])
+    hc_feats_train.to_csv(f"../../data/hc_feats_val_{os.path.basename(dataset_path)}.csv", index=None)
+
+    # hc_feats_train = compile_handcrafted_features(dataset['test'])
+    # hc_feats_train.to_csv(f"../../data/hc_feats_test_{os.path.basename(dataset_path)}.csv", index=None)
