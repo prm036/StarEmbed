@@ -1,7 +1,9 @@
 import pickle
 import pandas as pd
+import datasets
 CSDR1_RAW = f"/projects/p32795/weijian/cache/all_objects_47054_None.pkl"
 CSDR1_META = f"/projects/p32015/git/moirai_supsup/data_download/CSDR1_varstars.txt"
+CSDR1_TRAIN_TEST_SPLIT = f"/projects/p32795/hongyu/hf_csdr1_multiband_raw_lc_subclass_class_str"
 
 def load_csdr1_raw(path=None):
     """
@@ -18,6 +20,12 @@ def load_csdr1_raw(path=None):
     with open(path, 'rb') as f:
         data = pickle.load(f)
     return data
+
+def load_csdr1_train_test_split(path=None):
+    if not path:
+        path = CSDR1_TRAIN_TEST_SPLIT
+    ds = datasets.load_from_disk(path)
+    return ds
 
 def load_csdr1_meta(csv_path=None):
     """
@@ -105,6 +113,20 @@ def load_sharded_dataset(parent_dir: str, streaming: bool = False):
                 yield row
 
     return IterableDataset.from_generator(_generator)                            # behaves like any streamed split
+
+def filter_single_band(datapoint, band='r'):
+    if band == 'gr':
+        if datapoint['bands_data']['g'] is None or datapoint['bands_data']['r'] is None:
+            return False
+    else:
+        if datapoint['bands_data'][band] is None:
+            return False
+    return True
+
+def filter_single_length_datapoint(datapoint):
+    if len(datapoint['bands_data']['g']['target']) ==1 or len(datapoint['bands_data']['r']['target']) == 1:
+        return False
+    return True
 
 if __name__ == "__main__":
     dataset = load_sharded_dataset("/scratch/wlk5936/ztf/ztf_bucketed_dataset_sharded/")
