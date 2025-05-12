@@ -138,15 +138,29 @@ def compile_handcrafted_features(data):
 
             # Calculate FATS features for both bands
             start_time = time.time()
-            g_FATS_feats = calc_FATS_features(star['bands_data']['g'])
-            r_FATS_feats = calc_FATS_features(star['bands_data']['r'])
+            try:
+                g_FATS_feats = calc_FATS_features(star['bands_data']['g'])
+            except ValueError:
+                g_FATS_feats = np.full(len(FATS_feature_names), -2)
+
+            try:
+                r_FATS_feats = calc_FATS_features(star['bands_data']['r'])
+            except ValueError:
+                r_FATS_feats = np.full(len(FATS_feature_names), -2)
             batch_fats_time += time.time() - start_time
             batch_FATS_features.loc[star_idx, :] = np.concatenate((g_FATS_feats, r_FATS_feats))
 
             # Calculate light_curve features for both bands
             start_time = time.time()
-            g_LC_feats = calc_LC_features(star['bands_data']['g'])
-            r_LC_feats = calc_LC_features(star['bands_data']['r'])
+            try:
+                g_LC_feats = calc_LC_features(star['bands_data']['g'])
+            except ValueError:
+                g_LC_feats = np.full(len(LC_extractor.names), -2)
+
+            try:
+                r_LC_feats = calc_LC_features(star['bands_data']['r'])
+            except ValueError:
+                r_LC_feats = np.full(len(LC_extractor.names), -2)
             batch_lc_time += time.time() - start_time
             batch_LC_features.loc[star_idx, :] = np.concatenate((g_LC_feats, r_LC_feats))
 
