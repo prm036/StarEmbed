@@ -1,0 +1,122 @@
+from datasets import load_from_disk
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+import light_curve
+import os
+
+# The master branch of the FATS package is still on Python 2, so I've
+# checked out a version of the repo from a not-yet merged PR (#13) which
+# migrates everything to Python 3. Here, I'm importing that version of the package
+# with a couple spot fixes for remaining old syntax
+import sys
+sys.path.append("/projects/b1094/rehemtulla/SkAI/FATS")
+import FATS
+
+
+FATS_feature_names = [
+    'PeriodLS', 'Period_fit', 'Psi_CS', 'Psi_eta', 'Autocor_length', 'Con', 'PairSlopeTrend',
+    'Freq1_harmonics_amplitude_0', 'Freq1_harmonics_amplitude_1', 
+    'Freq1_harmonics_amplitude_2', 'Freq1_harmonics_amplitude_3',
+    'Freq2_harmonics_amplitude_0', 'Freq2_harmonics_amplitude_1',
+    'Freq2_harmonics_amplitude_2', 'Freq2_harmonics_amplitude_3',
+    'Freq3_harmonics_amplitude_0', 'Freq3_harmonics_amplitude_1',
+    'Freq3_harmonics_amplitude_2', 'Freq3_harmonics_amplitude_3',
+    'Freq1_harmonics_rel_phase_0', 'Freq1_harmonics_rel_phase_1',
+    'Freq1_harmonics_rel_phase_2', 'Freq1_harmonics_rel_phase_3',
+    'Freq2_harmonics_rel_phase_0', 'Freq2_harmonics_rel_phase_1',
+    'Freq2_harmonics_rel_phase_2', 'Freq2_harmonics_rel_phase_3',
+    'Freq3_harmonics_rel_phase_0', 'Freq3_harmonics_rel_phase_1',
+    'Freq3_harmonics_rel_phase_2', 'Freq3_harmonics_rel_phase_3',
+    'CAR_sigma', 'CAR_tau', 'CAR_mean', 'Con', 'PairSlopeTrend',
+]
+
+LC_extractor = light_curve.Extractor(
+    light_curve.Amplitude(),
+    light_curve.AndersonDarlingNormal(),
+    light_curve.BeyondNStd(nstd=1),
+    light_curve.BeyondNStd(nstd=2),
+    light_curve.BeyondNStd(nstd=3),
+    light_curve.Cusum(),
+    light_curve.Eta(),
+    light_curve.EtaE(),
+    light_curve.InterPercentileRange(0.25),
+    light_curve.InterPercentileRange(0.1),
+    light_curve.Kurtosis(),
+    light_curve.LinearFit(),
+    light_curve.LinearTrend(),
+    light_curve.MagnitudePercentageRatio(),
+    light_curve.MaximumSlope(),
+    light_curve.Mean(),
+    light_curve.Median(),
+    light_curve.MedianAbsoluteDeviation(),
+    light_curve.MedianBufferRangePercentage(),
+    light_curve.OtsuSplit(),
+    light_curve.PercentAmplitude(),
+    light_curve.ReducedChi2(),
+    light_curve.Skew(),
+    light_curve.StandardDeviation(),
+    light_curve.StetsonK(),
+    light_curve.WeightedMean(),
+)
+
+
+def calc_FATS_features(lc):
+    if lc is None:
+        return np.full(len(FATS_feature_names), -1)
+
+    lc_2darr = np.array([
+        lc['target'], lc['mjd'], lc['past_feat_dynamic_real']
+    ])
+
+    FATS_feature_extractor = FATS.FeatureSpace(
+        Data=['magnitude', 'time', 'error'],
+        featureList=FATS_feature_names
+    )
+    FATS_feature_extractor = FATS_feature_extractor.calculateFeature(lc_2darr)
+    return FATS_feature_extractor.result()
+
+
+def calc_LC_features(lc):
+    if lc is None or len(lc['target']) <= 4:
+        return np.full(len(LC_extractor.names), -1)
+
+    mag = np.array(lc['target'])
+    magerr = np.array(lc['past_feat_dynamic_real'])
+    mjd = np.array(lc['mjd'])
+
+    LC_features = LC_extractor(mjd, mag, magerr, sorted=True, check=False)
+    return LC_features
+
+
+def compile_handcrafted_features(data_split, out_path):
+    FATS_columns = ['g_'+feat_name for feat_name in FATS_feature_names] + ['r_'+feat_name for feat_name in FATS_feature_names]
+    FATS_features = pd.DataFrame(columns=FATS_columns)
+
+    LC_columns = ['g_'+feat_name for feat_name in LC_extractor.names] + ['r_'+feat_name for feat_name in LC_extractor.names]
+    LC_features = pd.DataFrame(columns=LC_columns)
+
+    for star_idx in range(2):
+        star = dataset['train'][star_idx]
+
+        g_FATS_feats = calc_FATS_features(star['bands_data']['g'])
+        r_FATS_feats = calc_FATS_features(star['bands_data']['r'])
+        FATS_features.loc[star_idx, :] = np.concatenate((g_FATS_feats, r_FATS_feats))
+
+        g_LC_feats = calc_LC_features(star['bands_data']['g'])
+        r_LC_feats = calc_LC_features(star['bands_data']['r'])
+        LC_features.loc[star_idx, :] = np.concatenate((g_LC_feats, r_LC_feats))
+
+    handcrafted_features = pd.concat((FATS_features, LC_features), axis=1)
+    return handcrafted_features
+
+
+if __name__ == "__main__":
+    dataset_path = "/projects/p32795/hongyu/hf_csdr1_multiband_raw_lc_subclass_class_str_v2"
+    dataset = load_from_disk(dataset_path)
+
+    hc_feats_train = compile_handcrafted_features(dataset['train'])
+    hc_feats_train.to_csv(f"../../data/hc_feats_train_{os.path.basename(dataset_path).csv}")
+
+    # compile_handcrafted_features(dataset['val'])
+    # compile_handcrafted_features(dataset['test'])
