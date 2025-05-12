@@ -1,5 +1,4 @@
 from datasets import load_from_disk
-import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import light_curve
@@ -16,7 +15,7 @@ import FATS
 
 FATS_feature_names = [
     'PeriodLS', 'Period_fit', 'Psi_CS', 'Psi_eta', 'Autocor_length', 'Con', 'PairSlopeTrend',
-    'Freq1_harmonics_amplitude_0', 'Freq1_harmonics_amplitude_1', 
+    'Freq1_harmonics_amplitude_0', 'Freq1_harmonics_amplitude_1',
     'Freq1_harmonics_amplitude_2', 'Freq1_harmonics_amplitude_3',
     'Freq2_harmonics_amplitude_0', 'Freq2_harmonics_amplitude_1',
     'Freq2_harmonics_amplitude_2', 'Freq2_harmonics_amplitude_3',
@@ -90,10 +89,12 @@ def calc_LC_features(lc):
 
 
 def compile_handcrafted_features(data_split, out_path):
-    FATS_columns = ['g_'+feat_name for feat_name in FATS_feature_names] + ['r_'+feat_name for feat_name in FATS_feature_names]
+    FATS_columns = ['g_'+feat_name for feat_name in FATS_feature_names] +\
+        ['r_'+feat_name for feat_name in FATS_feature_names]
     FATS_features = pd.DataFrame(columns=FATS_columns)
 
-    LC_columns = ['g_'+feat_name for feat_name in LC_extractor.names] + ['r_'+feat_name for feat_name in LC_extractor.names]
+    LC_columns = ['g_'+feat_name for feat_name in LC_extractor.names] +\
+        ['r_'+feat_name for feat_name in LC_extractor.names]
     LC_features = pd.DataFrame(columns=LC_columns)
 
     for star_idx in range(2):
