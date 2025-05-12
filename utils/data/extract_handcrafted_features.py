@@ -1,4 +1,5 @@
 from datasets import load_from_disk
+import multiprocessing as mp
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
@@ -123,23 +124,68 @@ def compile_handcrafted_features(data):
     total_fats_time = 0
     total_lc_time = 0
 
-    # Process each astronomical object in the dataset
-    for star_idx in tqdm(range(len(data)), desc="Computing handcrafted features"):
-        star = data[star_idx]
+    def process_batch(batch_data, batch_idx, batch_size):
+        """Process a batch of astronomical objects and return their features."""
+        batch_FATS_features = pd.DataFrame(columns=FATS_columns)
+        batch_LC_features = pd.DataFrame(columns=LC_columns)
 
-        # Calculate FATS features for both g and r bands and track time
-        start_time = time.time()
-        g_FATS_feats = calc_FATS_features(star['bands_data']['g'])
-        r_FATS_feats = calc_FATS_features(star['bands_data']['r'])
-        total_fats_time += time.time() - start_time
-        FATS_features.loc[star_idx, :] = np.concatenate((g_FATS_feats, r_FATS_feats))
+        batch_fats_time = 0
+        batch_lc_time = 0
 
-        # Calculate light_curve features for both g and r bands and track time
-        start_time = time.time()
-        g_LC_feats = calc_LC_features(star['bands_data']['g'])
-        r_LC_feats = calc_LC_features(star['bands_data']['r'])
-        total_lc_time += time.time() - start_time
-        LC_features.loc[star_idx, :] = np.concatenate((g_LC_feats, r_LC_feats))
+        for i, star in enumerate(batch_data):
+            # Calculate index in the original dataset
+            star_idx = batch_idx * batch_size + i
+
+            # Calculate FATS features for both bands
+            start_time = time.time()
+            g_FATS_feats = calc_FATS_features(star['bands_data']['g'])
+            r_FATS_feats = calc_FATS_features(star['bands_data']['r'])
+            batch_fats_time += time.time() - start_time
+            batch_FATS_features.loc[star_idx, :] = np.concatenate((g_FATS_feats, r_FATS_feats))
+
+            # Calculate light_curve features for both bands
+            start_time = time.time()
+            g_LC_feats = calc_LC_features(star['bands_data']['g'])
+            r_LC_feats = calc_LC_features(star['bands_data']['r'])
+            batch_lc_time += time.time() - start_time
+            batch_LC_features.loc[star_idx, :] = np.concatenate((g_LC_feats, r_LC_feats))
+
+        return batch_FATS_features, batch_LC_features, batch_fats_time, batch_lc_time
+
+    # Set up multiprocessing parameters
+    num_workers = mp.cpu_count() - 1  # Leave one CPU free
+    batch_size = max(1, len(data) // (num_workers * 2))  # make 2*num_workers batches
+
+    # Create batches
+    batches = []
+    for i in range(0, len(data), batch_size):
+        batch = data[i:i+batch_size]
+        batches.append((batch, i // batch_size, batch_size))
+
+    # Set up progress reporting
+    print(f"Processing {len(data)} objects with {num_workers} workers in {len(batches)} batches")
+
+    # Process batches in parallel
+    with mp.Pool(processes=num_workers) as pool:
+        results = list(tqdm(
+            pool.starmap(process_batch, batches),
+            total=len(batches),
+            desc="Computing handcrafted features"
+        ))
+
+    # Combine results
+    total_fats_time = 0
+    total_lc_time = 0
+
+    for batch_FATS_features, batch_LC_features, batch_fats_time, batch_lc_time in results:
+        FATS_features = pd.concat([FATS_features, batch_FATS_features])
+        LC_features = pd.concat([LC_features, batch_LC_features])
+        total_fats_time += batch_fats_time
+        total_lc_time += batch_lc_time
+
+    # Sort dataframes by index to maintain original order
+    FATS_features = FATS_features.sort_index()
+    LC_features = LC_features.sort_index()
 
     # Report timing information for benchmarking
     print("\n-- Time spent calculating features --")
