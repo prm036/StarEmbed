@@ -46,9 +46,9 @@ def read_OGLE_catalogs(region, parent_type, sub_type):
         A dataframe with the catalog information on the stars in the specified
         region of the specified parent-type and sub-type.
     """
-    region = region.upper()
-    parent_type = parent_type.upper()
-    region_class_dir = f"../../../data/ogle4_raw/OCVS/{region.lower()}/{parent_type.lower()}/"
+    region = region.lower()
+    parent_type = parent_type.lower()
+    region_class_dir = f"../../../data/ogle4_raw/OCVS/{region}/{parent_type}/"
 
     if sub_type in ["cep1O"]:
         catalog = pd.read_csv(
@@ -62,12 +62,13 @@ def read_OGLE_catalogs(region, parent_type, sub_type):
 
     catalog['remarks'] = ""
     catalog['region'] = region
-    catalog['parent_type'] = parent_type
-    catalog['sub_type'] = sub_type
 
     # Add class column which is combination of parent_type and sub_type
     # TODO: Formatting depends on type
-    catalog['class'] = catalog['parent_type'] + catalog['sub_type']
+    if parent_type == "cep":
+        catalog['parent_type'] = parent_type
+        catalog['sub_type'] = sub_type[3:]
+        catalog['class'] = sub_type
 
     return catalog
 
@@ -80,14 +81,12 @@ def merge_remarks(region, parent_type, sub_type, subtype_df):
     with open(region_class_dir + "remarks.txt", 'r') as f:
         for remark in f:
             remark = remark[:-1]  # Remove newline character at the end
-            print(remark)
             OGLE_IDs = re.findall(r'\S*OGLE-BLG-CEP\S*', remark)
             for OGLE_ID in OGLE_IDs:
-                print(OGLE_ID)
 
                 # Remark is for a star in a different catalog
                 if OGLE_ID not in subtype_df['ID'].values:
-                    print("OGLE_ID not in df:", OGLE_ID, "\n")
+                    # print("OGLE_ID not in df:", OGLE_ID)
                     continue
 
                 # Get remarks for this OGLE_ID, starts with empty string
@@ -98,8 +97,6 @@ def merge_remarks(region, parent_type, sub_type, subtype_df):
                     print("Multiple entries with same ID:", OGLE_ID)
                     continue
 
-                print(existing_remarks, len(existing_remarks), "\n")
-
                 # If there's already a remark present, add a spacer
                 if existing_remarks[0] != "":
                     existing_remarks += " | "
@@ -107,10 +104,8 @@ def merge_remarks(region, parent_type, sub_type, subtype_df):
                 # Add the new remark into the dataframe
                 subtype_df.loc[subtype_df['ID'] == OGLE_ID, 'remarks'] = existing_remarks + remark
 
+    return subtype_df
+
 
 def merge_IDs(region, parent_type, sub_type, subtype_df):
-    pass
-
-
-if __name__ == "__main__":
-    catalog = read_OGLE_catalogs("blg", "cep", "1O")
+    return subtype_df

@@ -1,8 +1,6 @@
 from datasets import Dataset, Features, Value, Sequence
 from tqdm import tqdm
 import datasets
-import numpy as np
-import pandas as pd
 
 from utils.data.preprocess.read_OGLE_catalogs import read_OGLE_catalogs, merge_remarks, merge_IDs
 
