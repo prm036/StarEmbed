@@ -1,4 +1,6 @@
 import pandas as pd
+import numpy as np
+import glob
 import re
 
 
@@ -50,7 +52,7 @@ def load_catalog(region, parent_type, sub_type):
     parent_type = parent_type.lower()
     region_class_dir = f"../../../data/ogle4_raw/OCVS/{region}/{parent_type}/"
 
-    if sub_type in ["cep1O"]:
+    if sub_type in ["cep1O", "cepF"]:
         catalog = pd.read_csv(
             region_class_dir + f"{sub_type}.dat", delimiter=r'\s+',
             names=[
@@ -189,3 +191,63 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
 
     # Return the updated dataframe
     return subtype_df
+
+
+def read_light_curve(region, parent_type, sub_type, star_ID):
+    """
+    Read in the light curve for a given star ID.
+
+    Parameters
+    ----------
+    region : str
+    parent_type : str
+    sub_type : str
+        Same as load_catalog
+    star_ID : str
+        The OGLE ID of the star to fetch the light curve for
+        e.g., "OGLE-BLG-ECL-000007"
+
+    Returns
+    -------
+    lc : pd.DataFrame
+        A dataframe with the light curve data for the given star
+        Columns:
+            - mjd: Modified Julian Date
+            - mag: Magnitude
+            - mag_err: Magnitude error
+    """
+    region = region.upper()
+    parent_type = parent_type.upper()
+    region_class_dir = f"../../../data/ogle4_raw/OCVS/{region.lower()}/{parent_type.lower()}/"
+
+    # Need to select all files matching this star ID across I and V band and
+    # different formats of phot directories (sometimes phot/ sometimes phot_ogle4/ etc.)
+    bands = ["I", "V"]
+    multiband_lc = {}
+
+    for band in bands:
+        lc_files = glob.glob(region_class_dir + f"*phot*/{band}/{star_ID}.dat")
+        if len(lc_files) == 0:
+            # print(f"No light curve found for {star_ID}")
+            multiband_lc[band] = None
+            continue
+
+        lc = pd.read_csv(lc_files[0], delimiter=' ', names=['hjd_shifted', 'mag', 'magunc'])
+
+        # unshift then convert to MJD
+        lc['mjd'] = lc['hjd_shifted'].to_numpy() + 2450000 - 2400000.5
+
+        # Format as expected by bands_data entry in standardized StarEmbed schema
+        multiband_lc[band] = {
+            "mjd": lc['mjd'].tolist(),
+            "target": lc['mag'].tolist(),
+            "past_feat_dynamic_real": lc['magunc'].tolist(),
+            "feat_dynamic_real": np.diff(lc['hjd_shifted'].tolist(), prepend=0),
+            "length": len(lc)
+        }
+
+    # If no light curve found for any band, return None
+    if all(multiband_lc[band] is None for band in bands):
+        return None
+
+    return multiband_lc
