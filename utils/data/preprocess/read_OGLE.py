@@ -4,6 +4,24 @@ import glob
 import re
 
 
+def get_period_feature_columns(num_periods):
+    """
+    Return the column names for the period features in the catalog repeated num_periods times.
+    """
+    feature_names = [
+        'period', 'period_unc', 'time_of_peak[HJD]', 'amp_I', 'fourier_R21',
+        'fourier_phi21', 'fourier_R31', 'fourier_phi31'
+    ]
+
+    for i in range(2, num_periods + 1):
+        feature_names.extend([
+            f'period{i}', f'period{i}_unc', f'time_of_peak{i}[HJD]', f'amp{i}_I',
+            f'fourier{i}_R21', f'fourier{i}_phi21', f'fourier{i}_R31', f'fourier{i}_phi31'
+        ])
+
+    return feature_names
+
+
 def load_catalog(region, parent_type, sub_type):
     """
     Read in an OGLE catalog for a specific region, parent-type, and sub-type and
@@ -52,25 +70,34 @@ def load_catalog(region, parent_type, sub_type):
     parent_type = parent_type.lower()
     region_class_dir = f"../../../data/ogle4_raw/OCVS/{region}/{parent_type}/"
 
-    if sub_type in ["cep1O", "cepF"]:
+    if sub_type in ["cep1O", "cepF", "cepF1O", "cep1O2O"]:
+        if sub_type in ["cep1O", "cepF"]:
+            num_periods = 1
+        if sub_type in ["cepF1O", "cep1O2O"]:
+            num_periods = 2
+
+        # Catalog files have "-" in place of missing values, so pd.read_csv with
+        # the whitespace delimiter is appropriate
         catalog = pd.read_csv(
             region_class_dir + f"{sub_type}.dat", delimiter=r'\s+',
             names=[
-                'ID', 'avg_mag_I', 'avg_mag_V', 'period[d]', 'period_unc[d]',
-                'time_of_peak[HJD]', 'amp_I', 'fourier_R21', 'fourier_phi21',
-                'fourier_R31', 'fourier_phi31'
+                'sourceid', 'avg_mag_I', 'avg_mag_V',
+                *get_period_feature_columns(num_periods)
             ]
         )
 
     catalog['remarks'] = ""
     catalog['region'] = region
 
+    # Replace any "-" in any column with NaN
+    catalog = catalog.replace("-", np.nan)
+
     # Add class column which is combination of parent_type and sub_type
     # TODO: Formatting depends on type
     if parent_type == "cep":
         catalog['parent_type'] = parent_type
         catalog['sub_type'] = sub_type[3:]
-        catalog['class'] = sub_type
+        catalog['class_str'] = sub_type
 
     return catalog
 
@@ -111,15 +138,17 @@ def merge_remarks(region, parent_type, sub_type, subtype_df):
             OGLE_IDs = re.findall(r'\S*OGLE-BLG-CEP\S*', remark)
             for OGLE_ID in OGLE_IDs:
                 # Skip if remark is for a star in a different catalog
-                if OGLE_ID not in subtype_df['ID'].values:
+                if OGLE_ID not in subtype_df['sourceid'].values:
                     continue
 
                 # Get remarks for this OGLE_ID, starts with empty string
-                existing_remarks = subtype_df.loc[subtype_df['ID'] == OGLE_ID, 'remarks'].values
+                existing_remarks = subtype_df.loc[
+                    subtype_df['sourceid'] == OGLE_ID, 'remarks'
+                ].values
 
                 # There shouldn't be multiple entries for the same ID
                 if len(existing_remarks) > 1:
-                    print("Multiple entries with same ID:", OGLE_ID)
+                    print("Multiple entries with same sourceids:", OGLE_ID)
                     continue
 
                 # If there's already a remark present, add a spacer
@@ -127,7 +156,9 @@ def merge_remarks(region, parent_type, sub_type, subtype_df):
                     existing_remarks += " | "
 
                 # Add the new (concatenated) remark into the dataframe
-                subtype_df.loc[subtype_df['ID'] == OGLE_ID, 'remarks'] = existing_remarks + remark
+                subtype_df.loc[
+                    subtype_df['sourceid'] == OGLE_ID, 'remarks'
+                ] = existing_remarks + remark
 
     # Return the updated dataframe
     return subtype_df
@@ -168,10 +199,11 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
         (101, 110)   # Additional identifiers
     ]
 
-    # Read the data
+    # Missing values are represented by whitespace, so read_fwf must be used in place of pd.read_csv
     ident = pd.read_fwf(
         region_class_dir + "ident.dat", colspecs=colspecs,
-        names=['ID', 'type', 'RA', 'Dec', 'OGLE-IV', 'OGLE-III', 'OGLE-II', 'OtherID']
+        names=['sourceid', 'type', 'ra', 'dec',
+               'OGLE_IV_id', 'OGLE_III_id', 'OGLE_II_id', 'other_id']
     )
     # ['ID', 'type', 'RAh', 'RAm', 'RAs', 'DE-', 'DEd', 'DEm', 'DEs',
     #  'OGLE-IV', 'OGLE-III', 'OGLE-II', 'OtherID']
@@ -180,14 +212,15 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
     ident = ident.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
 
     # Create a mapping from ID to the columns we want to copy
-    cols_to_copy = ['RA', 'Dec', 'OGLE-IV', 'OGLE-III', 'OGLE-II', 'OtherID']
-    id_to_cols = ident.set_index('ID')[cols_to_copy]
+    cols_to_copy = ['ra', 'dec', 'OGLE_IV_id', 'OGLE_III_id', 'OGLE_II_id', 'other_id']
+    id_to_cols = ident.set_index('sourceid')[cols_to_copy]
+    subtype_df[cols_to_copy] = ""
 
     # For each row in subtype_df, look up the corresponding columns from ident using the ID
     for idx, row in subtype_df.iterrows():
-        if row['ID'] in id_to_cols.index:
+        if row['sourceid'] in id_to_cols.index:
             # Add the new columns into the appropriate row in the dataframe
-            subtype_df.loc[idx, cols_to_copy] = id_to_cols.loc[row['ID']]
+            subtype_df.loc[idx, cols_to_copy] = id_to_cols.loc[row['sourceid']]
 
     # Return the updated dataframe
     return subtype_df
