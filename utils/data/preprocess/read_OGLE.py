@@ -199,6 +199,7 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
     region_class_dir = f"../../../data/ogle4_raw/OCVS/{region.lower()}/{parent_type.lower()}/"
 
     # Define the column widths based on the data format
+    # Regions use either three or four digit numbers in the IDs
     if (region == "BLG") & (parent_type == "CEP"):
         colspecs = [
             (0, 16),    # Star ID
@@ -210,7 +211,7 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
             (85, 100),   # OGLE-II
             (101, 120)   # Additional identifiers
         ]
-    elif (region in ["GD", "LMC"]) & (parent_type == "CEP"):
+    elif (region in ["GD", "LMC", "SMC"]) & (parent_type == "CEP"):
         colspecs = [
             (0, 17),    # Star ID
             (18, 26),   # Type
@@ -292,7 +293,7 @@ def read_light_curve(region, parent_type, sub_type, star_ID):
 
         lc = pd.read_csv(lc_files[0], delimiter=r'\s+', names=['time', 'mag', 'magunc'], dtype=str)
 
-        # The time column in light curve files are inconsistent and unpredictable
+        # The time column in light curve files are HJD but sometimes shifted by a constant
         # Check the length of one time entry to determine its format
         if len(lc['time'][0]) == 13:  # time is HJD, shift to MJD
             lc['mjd'] = lc['time'].astype(np.float64) - 2400000.5

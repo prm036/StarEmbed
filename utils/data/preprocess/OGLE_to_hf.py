@@ -72,6 +72,13 @@ def create_dataset():
         ("lmc", "cep", "cep2O3O"),
         ("lmc", "cep", "cepF1O2O"),
         ("lmc", "cep", "cep1O2O3O"),
+
+        ("smc", "cep", "cepF"),
+        ("smc", "cep", "cep1O"),
+        ("smc", "cep", "cep2O"),
+        ("smc", "cep", "cepF1O"),
+        ("smc", "cep", "cep1O2O"),
+        ("smc", "cep", "cep1O2O3O"),
     ]
 
     # Create empty lists to store dataset entries
