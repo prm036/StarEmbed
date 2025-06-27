@@ -1,4 +1,5 @@
 from datasets import Dataset, Features, Value, Sequence
+from tqdm import tqdm
 
 from read_OGLE import (
     load_catalog, merge_remarks, merge_ident, read_light_curve, get_period_feature_columns
@@ -47,20 +48,30 @@ schema = Features({
 def create_dataset():
     catalogs_to_process = [
         # region, parent_type, sub_type
-        ("blg", "cep", "cep1O"),
         ("blg", "cep", "cepF"),
-        ("blg", "cep", "cep1O2O"),
+        ("blg", "cep", "cep1O"),
         ("blg", "cep", "cepF1O"),
+        ("blg", "cep", "cep1O2O"),
         ("blg", "cep", "cep2O3O"),
         ("blg", "cep", "cep1O2O3O"),
 
-        ("gd", "cep", "cep1O"),
         ("gd", "cep", "cepF"),
-        ("gd", "cep", "cep1O2O"),
+        ("gd", "cep", "cep1O"),
         ("gd", "cep", "cepF1O"),
+        ("gd", "cep", "cep1O2O"),
         ("gd", "cep", "cep2O3O"),
-        ("gd", "cep", "cep1O2O3O"),
         ("gd", "cep", "cepF1O2O"),
+        ("gd", "cep", "cep1O2O3O"),
+
+        ("lmc", "cep", "cepF"),
+        ("lmc", "cep", "cep1O"),
+        ("lmc", "cep", "cep2O"),
+        ("lmc", "cep", "cepF1O"),
+        ("lmc", "cep", "cep1O2O"),
+        ("lmc", "cep", "cep1O3O"),
+        ("lmc", "cep", "cep2O3O"),
+        ("lmc", "cep", "cepF1O2O"),
+        ("lmc", "cep", "cep1O2O3O"),
     ]
 
     # Create empty lists to store dataset entries
@@ -69,7 +80,7 @@ def create_dataset():
     # List of IDs that don't have light curves
     no_lc_ids = []
 
-    for catalog_to_process in catalogs_to_process:
+    for catalog_to_process in tqdm(catalogs_to_process, desc="Processing catalogs", unit="catalog"):
         cat = load_catalog(*catalog_to_process)
         cat = merge_remarks(*catalog_to_process, cat)
         cat = merge_ident(*catalog_to_process, cat)

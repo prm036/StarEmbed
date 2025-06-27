@@ -71,12 +71,14 @@ def load_catalog(region, parent_type, sub_type):
     region_class_dir = f"../../../data/ogle4_raw/OCVS/{region}/{parent_type}/"
 
     if parent_type == "cep":
-        if sub_type in ["cep1O", "cepF"]:
+        if sub_type in ["cepF", "cep1O", "cep2O"]:
             num_periods = 1
-        elif sub_type in ["cepF1O", "cep1O2O", "cep2O3O"]:
+        elif sub_type in ["cepF1O", "cep1O2O", "cep1O3O", "cep2O3O"]:
             num_periods = 2
-        elif sub_type in ["cep1O2O3O", "cepF1O2O"]:
+        elif sub_type in ["cepF1O2O", "cep1O2O3O"]:
             num_periods = 3
+        else:
+            raise NotImplementedError(f"Subtype {sub_type} period count not implemented")
 
         # Catalog files have "-" in place of missing values, so pd.read_csv with
         # the whitespace delimiter is appropriate
@@ -99,7 +101,7 @@ def load_catalog(region, parent_type, sub_type):
     catalog['region'] = region
 
     # Replace any "-" in any column with NaN
-    catalog = catalog.replace("-", np.nan)
+    catalog = catalog.mask(catalog == "-", np.nan)
 
     # Add class column which is combination of parent_type and sub_type
     # TODO: Formatting depends on type
@@ -197,16 +199,30 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
     region_class_dir = f"../../../data/ogle4_raw/OCVS/{region.lower()}/{parent_type.lower()}/"
 
     # Define the column widths based on the data format
-    colspecs = [
-        (0, 16),    # Star ID
-        (17, 25),   # Type
-        (27, 38),   # Right Ascension
-        (39, 50),   # Declination
-        (52, 68),   # OGLE-IV
-        (69, 84),   # OGLE-III
-        (85, 100),   # OGLE-II
-        (101, 120)   # Additional identifiers
-    ]
+    if (region == "BLG") & (parent_type == "CEP"):
+        colspecs = [
+            (0, 16),    # Star ID
+            (17, 25),   # Type
+            (27, 38),   # Right Ascension
+            (39, 50),   # Declination
+            (52, 68),   # OGLE-IV
+            (69, 84),   # OGLE-III
+            (85, 100),   # OGLE-II
+            (101, 120)   # Additional identifiers
+        ]
+    elif (region in ["GD", "LMC"]) & (parent_type == "CEP"):
+        colspecs = [
+            (0, 17),    # Star ID
+            (18, 26),   # Type
+            (28, 39),   # Right Ascension
+            (40, 51),   # Declination
+            (53, 69),   # OGLE-IV
+            (70, 85),   # OGLE-III
+            (86, 101),   # OGLE-II
+            (102, 121)   # Additional identifiers
+        ]
+    else:
+        raise NotImplementedError(f"Region {region} and parent type {parent_type} not implemented")
 
     # Missing values are represented by whitespace, so read_fwf must be used in place of pd.read_csv
     ident = pd.read_fwf(
