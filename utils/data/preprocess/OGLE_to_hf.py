@@ -1,8 +1,9 @@
 from datasets import Dataset, Features, Value, Sequence
 
 from read_OGLE import (
-    load_catalog, merge_remarks, merge_ident, read_light_curve
+    load_catalog, merge_remarks, merge_ident, read_light_curve, get_period_feature_columns
 )
+
 
 # Standardized StarEmbed schema with some columns unique to Catalina
 band_schema = Features({
@@ -18,15 +19,6 @@ schema = Features({
     "sourceid": Value("string"),
     "avg_mag_I": Value("float64"),
     "avg_mag_V": Value("float64"),
-
-    "period": Value("float64"),
-    "period_unc": Value("float64"),
-    "time_of_peak[HJD]": Value("float64"),
-    "amp_I": Value("float64"),
-    "fourier_R21": Value("float64"),
-    "fourier_phi21": Value("float64"),
-    "fourier_R31": Value("float64"),
-    "fourier_phi31": Value("float64"),
 
     "parent_type": Value("string"),
     "sub_type": Value("string"),
@@ -49,7 +41,7 @@ schema = Features({
     "other_id": Value("string"),
     "ra": Value("string"),
     "dec": Value("string"),
-})
+} | {feature: Value("float64") for feature in get_period_feature_columns(3)})
 
 
 def create_dataset():
