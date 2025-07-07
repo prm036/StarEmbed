@@ -1,5 +1,8 @@
 from datasets import Dataset, Features, Value, Sequence
+import multiprocessing
 from tqdm import tqdm
+import argparse
+import time
 
 from read_OGLE import (
     load_catalog, merge_remarks, merge_ident, read_light_curve, get_period_feature_columns
@@ -45,10 +48,23 @@ schema = Features({
 } | {feature: Value("float64") for feature in get_period_feature_columns(3)})
 
 
-def create_dataset():
+def process_star(cat_idx, catalog, catalog_desc):
+    star_info = catalog.iloc[cat_idx].to_dict()
+    multiband_lc = read_light_curve(*catalog_desc, star_info['sourceid'])
+
+    if multiband_lc is None:
+        return None, star_info['sourceid']
+
+    entry = star_info | {"bands_data": multiband_lc}
+    return entry, None
+
+
+def create_dataset(num_workers):
     catalogs_to_process = [
         # region, parent_type, sub_type
-        ("blg", "rrlyr", "RRab")
+        ("blg", "rrlyr", "RRab"),
+        ("blg", "rrlyr", "RRc"),
+        ("blg", "rrlyr", "RRd"),
     ]
 
     # Create empty lists to store dataset entries
@@ -57,10 +73,18 @@ def create_dataset():
     # List of IDs that don't have light curves
     no_lc_ids = []
 
+    print(f"Processing {len(catalogs_to_process)} catalogs")
     for catalog_to_process in catalogs_to_process:
+        start_time = time.time()
+        print(f"  Starting catalog-level data for {catalog_to_process[0]} {catalog_to_process[2]}")
+
         cat = load_catalog(*catalog_to_process)
         cat = merge_remarks(*catalog_to_process, cat)
         cat = merge_ident(*catalog_to_process, cat)
+        cat.reset_index(drop=True, inplace=True)
+
+        cat_read_time = time.time()
+        print(f"  Finished catalog-level data ({cat_read_time - start_time:.2f}s)")
 
         for star_ID in tqdm(
             cat['sourceid'],
@@ -89,10 +113,17 @@ def create_dataset():
 
 
 if __name__ == "__main__":
-    dataset = create_dataset()
+    parser = argparse.ArgumentParser(description='Process OGLE data to HuggingFace format')
+    parser.add_argument('--num_workers', type=int, default=4,
+                        help='Number of workers for parallel processing (default: 4)')
+
+    args = parser.parse_args()
+    num_workers = args.num_workers
+
+    dataset = create_dataset(num_workers)
     dataset.save_to_disk(
         "../../../data/ogle4_hf",
-        num_proc=4,
+        num_proc=num_workers,
         max_shard_size="100MB"
     )
     print("Done writing OGLE data to HF format\n")
