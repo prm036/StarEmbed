@@ -271,19 +271,18 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
     return subtype_df
 
 
-def read_light_curve(region, parent_type, sub_type, star_ID):
+def read_light_curve(template_lc_glob_path):
     """
-    Read in the light curve for a given star ID.
+    Read in the light curve for a single star ID.
+    Slightly clunky implementation to allow support for multiprocessing
 
     Parameters
     ----------
-    region : str
-    parent_type : str
-    sub_type : str
-        Same as load_catalog
-    star_ID : str
-        The OGLE ID of the star to fetch the light curve for
-        e.g., "OGLE-BLG-ECL-000007"
+    template_lc_glob_path : str
+        A template light curve path that will be used to find the light curve
+        files for a single star ID.
+        Example:
+            "../../../data/ogle4_raw/OCVS/{region}/{parent_type}/*phot*/BAND/{star_ID}.dat"
 
     Returns
     -------
@@ -294,9 +293,8 @@ def read_light_curve(region, parent_type, sub_type, star_ID):
             - mag: Magnitude
             - mag_err: Magnitude error
     """
-    region = region.upper()
-    parent_type = parent_type.upper()
-    region_class_dir = f"../../../data/ogle4_raw/OCVS/{region.lower()}/{parent_type.lower()}/"
+    # Extract OGLE star ID from template lc path
+    star_ID = template_lc_glob_path.split("/")[-1].split(".")[0]
 
     # Need to select all files matching this star ID across I and V band and
     # different formats of phot directories (sometimes phot/ sometimes phot_ogle4/ etc.)
@@ -304,12 +302,13 @@ def read_light_curve(region, parent_type, sub_type, star_ID):
     multiband_lc = {}
 
     for band in bands:
-        lc_files = glob.glob(region_class_dir + f"*phot*/{band}/{star_ID}.dat")
+        lc_files = glob.glob(template_lc_glob_path.replace("BAND", band))
         if len(lc_files) == 0:
             # print(f"No light curve found for {star_ID}")
             multiband_lc[band] = None
             continue
 
+        # TODO: add support for multiple light curve files per band for a given star
         lc = pd.read_csv(lc_files[0], delimiter=r'\s+', names=['time', 'mag', 'magunc'], dtype=str)
 
         # The time column in light curve files are HJD but sometimes shifted by a constant

@@ -1,13 +1,13 @@
 from datasets import Dataset, Features, Value, Sequence
-import multiprocessing
+from multiprocessing import Pool
 from tqdm import tqdm
+import numpy as np
 import argparse
 import time
 
 from read_OGLE import (
     load_catalog, merge_remarks, merge_ident, read_light_curve, get_period_feature_columns
 )
-
 
 # Standardized StarEmbed schema with some columns unique to Catalina
 band_schema = Features({
@@ -48,22 +48,11 @@ schema = Features({
 } | {feature: Value("float64") for feature in get_period_feature_columns(3)})
 
 
-def process_star(cat_idx, catalog, catalog_desc):
-    star_info = catalog.iloc[cat_idx].to_dict()
-    multiband_lc = read_light_curve(*catalog_desc, star_info['sourceid'])
-
-    if multiband_lc is None:
-        return None, star_info['sourceid']
-
-    entry = star_info | {"bands_data": multiband_lc}
-    return entry, None
-
-
 def create_dataset(num_workers):
     catalogs_to_process = [
         # region, parent_type, sub_type
         ("blg", "rrlyr", "RRab"),
-        ("blg", "rrlyr", "RRc"),
+        # ("blg", "rrlyr", "RRc"),
         ("blg", "rrlyr", "RRd"),
     ]
 
@@ -75,8 +64,13 @@ def create_dataset(num_workers):
 
     print(f"Processing {len(catalogs_to_process)} catalogs")
     for catalog_to_process in catalogs_to_process:
+        region = catalog_to_process[0].lower()
+        parent_type = catalog_to_process[1].lower()
+        sub_type = catalog_to_process[2]
+
         start_time = time.time()
-        print(f"  Starting catalog-level data for {catalog_to_process[0]} {catalog_to_process[2]}")
+        print(f"  {region.upper()} {parent_type.upper()} {sub_type}")
+        print("  Started catalog-level data")
 
         cat = load_catalog(*catalog_to_process)
         cat = merge_remarks(*catalog_to_process, cat)
@@ -86,28 +80,48 @@ def create_dataset(num_workers):
         cat_read_time = time.time()
         print(f"  Finished catalog-level data ({cat_read_time - start_time:.2f}s)")
 
-        for star_ID in tqdm(
-            cat['sourceid'],
-            desc=f"Processing {catalog_to_process[0]} {catalog_to_process[2]}"
-        ):
-            star_info = cat[cat['sourceid'] == star_ID].to_dict(orient='records')[0]
+        lc_base_dir = f"../../../data/ogle4_raw/OCVS/{region}/{parent_type}/"
+        template_lc_glob_path = [
+            lc_base_dir + f"*phot*/BAND/{star_ID}.dat"
+            for star_ID in cat['sourceid']
+        ]
 
-            # Get light curve, create entry
-            multiband_lc = read_light_curve(*catalog_to_process, star_ID)
+        # Use multiprocessing to read light curves in parallel
+        with Pool(processes=num_workers) as pool:
+            # Map read_light_curve function over template_lc_glob_path
+            multiband_lcs = list(tqdm(
+                pool.imap(read_light_curve, template_lc_glob_path),
+                total=len(template_lc_glob_path),
+                desc=f"  Processing {catalog_to_process[0]} {catalog_to_process[2]} light curves",
+                unit="stars"
+            ))
 
-            if multiband_lc is None:
-                no_lc_ids.append(star_ID)
-                continue
+        # Process results and create entries
+        start_time = time.time()
+        print("  Started collating light curve and catalog data")
 
-            # Create entry following schema
-            entry = star_info | {"bands_data": multiband_lc}
+        # Create a mapping from sourceid to star_info for quick lookup
+        star_info_map = cat.set_index('sourceid').to_dict(orient='index')
 
-            dataset_entries.append(entry)
+        valid_mask = [lc is not None for lc in multiband_lcs]
+        valid_star_ids = cat['sourceid'][valid_mask]
+        valid_multiband_lcs = [lc for lc in multiband_lcs if lc is not None]
+
+        dataset_entries.extend([
+            star_info_map[star_id] | {"bands_data": lc} | {"sourceid": star_id}
+            for star_id, lc in zip(valid_star_ids, valid_multiband_lcs)
+        ])
+
+        # Track IDs without light curves
+        no_lc_ids.extend(cat['sourceid'][~np.array(valid_mask)])
+        print(f"  Finished collating ({time.time() - start_time:.2f}s)\n")
 
     # Create HuggingFace dataset
+    start_time = time.time()
+    print("\nRegistering all stars in a huggingface dataset")
     dataset = Dataset.from_list(dataset_entries, features=schema)
+    print(f"Created dataset with {len(dataset_entries)} entries ({time.time() - start_time:.2f}s)")
 
-    print(f"Created dataset with {len(dataset_entries)} entries")
     print(f"No lightcurve data found for {len(no_lc_ids)} IDs")
     return dataset
 
@@ -124,6 +138,7 @@ if __name__ == "__main__":
     dataset.save_to_disk(
         "../../../data/ogle4_hf",
         num_proc=num_workers,
-        max_shard_size="100MB"
+        max_shard_size="100MB",
+        storage_options={"max_proc": num_workers}  # Multiprocessing doesn't work without this
     )
     print("Done writing OGLE data to HF format\n")
