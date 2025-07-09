@@ -89,21 +89,41 @@ def load_catalog(region, parent_type, sub_type):
                 *get_period_feature_columns(num_periods)
             ]
         )
+
+        # Add empty columns to catalog for extra periods
+        extra_features = set(get_period_feature_columns(3)) - \
+            set(get_period_feature_columns(num_periods))
+        for feature in extra_features:
+            catalog[feature] = np.nan
+    elif parent_type == "dsct":
+        colspecs = [
+            (0, 19), (21, 27), (28, 34),
+            # Period 1 (period, period_unc, time_of_peak, I-band amplitude)
+            (36, 46), (47, 57), (59, 69), (71, 76),
+            # Period 1 Fourier coefficients
+            (78, 83), (84, 89), (91, 96), (97, 102),
+            # Period 2
+            (104, 114), (115, 125), (127, 137), (139, 144),
+            (146, 151), (152, 157), (159, 164), (165, 170),
+            # Period 3
+            (172, 182), (183, 193), (195, 205), (207, 212),
+            (214, 219), (220, 225), (227, 232), (234, 238)
+        ]
+        catalog = pd.read_fwf(
+            region_class_dir + f"{sub_type}.dat", colspecs=colspecs,
+            names=[
+                'sourceid', 'avg_mag_I', 'avg_mag_V', *get_period_feature_columns(3)
+            ]
+        )
     else:
         raise NotImplementedError(f"Parent type {parent_type} not implemented")
 
-    # Add empty columns to catalog for extra periods
-    extra_features = set(get_period_feature_columns(3)) - \
-        set(get_period_feature_columns(num_periods))
-    for feature in extra_features:
-        catalog[feature] = np.nan
+    # Replace any "-" in any column with NaN
+    catalog = catalog.mask((catalog == "-") | (catalog == ""), np.nan)
 
     # Add class column which is combination of parent_type and sub_type
     catalog['remarks'] = ""
     catalog['region'] = region
-
-    # Replace any "-" in any column with NaN
-    catalog = catalog.mask(catalog == "-", np.nan)
 
     # Add class column which is combination of parent_type and sub_type
     # TODO: Formatting depends on type
@@ -111,6 +131,11 @@ def load_catalog(region, parent_type, sub_type):
         catalog['parent_type'] = parent_type
         catalog['sub_type'] = sub_type
         catalog['class_str'] = sub_type
+    elif parent_type == "dsct":
+        catalog['parent_type'] = parent_type
+        # Populated in merge_ident()
+        catalog['sub_type'] = ""
+        catalog['class_str'] = ""
     else:
         raise NotImplementedError(f"Parent type {parent_type} not implemented")
 
@@ -143,6 +168,8 @@ def merge_remarks(region, parent_type, sub_type, subtype_df):
     region = region.upper()
     parent_type = parent_type.upper()
     region_class_dir = f"../../../data/ogle4_raw/OCVS/{region.lower()}/{parent_type.lower()}/"
+
+    # TODO: Add remark about spec confirmed delta scuti
 
     # Open the remarks.txt file and loop over its lines
     with open(region_class_dir + "remarks.txt", 'r') as f:
@@ -217,36 +244,23 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
         ]
     elif (region in ["GD", "LMC", "SMC"]) & (parent_type == "CEP"):
         colspecs = [
-            (0, 17),    # Star ID
-            (18, 26),   # Type
-            (28, 39),   # Right Ascension
-            (40, 51),   # Declination
-            (53, 69),   # OGLE-IV
-            (70, 85),   # OGLE-III
-            (86, 101),   # OGLE-II
-            (102, 121)   # Additional identifiers
+            (0, 17), (18, 26), (28, 39), (40, 51),
+            (53, 69), (70, 85), (86, 101), (102, 121)
         ]
-    elif (region in ["BLG"]) & (parent_type == "RRLYR"):
+    elif (region in ["BLG", "LMC"]) & (parent_type == "RRLYR"):
         colspecs = [
-            (0, 20),    # Star ID
-            (22, 26),   # Type
-            (28, 39),   # Right Ascension
-            (40, 51),   # Declination
-            (53, 69),   # OGLE-IV
-            (70, 85),   # OGLE-III
-            (86, 101),   # OGLE-II
-            (102, 121)   # Additional identifiers
+            (0, 20), (22, 26), (28, 39), (40, 51),
+            (53, 69), (70, 85), (86, 101), (102, 121)
         ]
-    elif (region in ["GD"]) & (parent_type == "RRLYR"):
+    elif (region in ["GD", "SMC"]) & (parent_type == "RRLYR"):
         colspecs = [
-            (0, 19),    # Star ID
-            (21, 25),   # Type
-            (27, 38),   # Right Ascension
-            (39, 50),   # Declination
-            (52, 68),   # OGLE-IV
-            (69, 83),   # OGLE-III
-            (85, 100),   # OGLE-II
-            (101, 130)   # Additional identifiers
+            (0, 19), (21, 25), (27, 38), (39, 50),
+            (52, 68), (69, 83), (85, 100), (101, 130)
+        ]
+    elif (region in ["BLG"]) & (parent_type == "DSCT"):
+        colspecs = [
+            (0, 19), (21, 31), (33, 44), (45, 56),
+            (58, 74), (75, 90), (91, 107), (108, 130)
         ]
     else:
         raise NotImplementedError(f"Region {region} and parent type {parent_type} not implemented")
@@ -257,11 +271,13 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
         names=['sourceid', 'type', 'ra', 'dec',
                'OGLE_IV_id', 'OGLE_III_id', 'OGLE_II_id', 'other_id']
     )
-    # ['ID', 'type', 'RAh', 'RAm', 'RAs', 'DE-', 'DEd', 'DEm', 'DEs',
-    #  'OGLE-IV', 'OGLE-III', 'OGLE-II', 'OtherID']
 
     # Clean up any whitespace
     ident = ident.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+
+    if parent_type == "DSCT":
+        subtype_df['sub_type'] = ident['type']
+        subtype_df['class_str'] = "dsct_" + ident['type']
 
     # Create a mapping from ID to the columns we want to copy
     cols_to_copy = ['ra', 'dec', 'OGLE_IV_id', 'OGLE_III_id', 'OGLE_II_id', 'other_id']
@@ -315,17 +331,21 @@ def read_light_curve(template_lc_glob_path):
             multiband_lc[band] = None
             continue
 
-        # TODO: add support for multiple light curve files per band for a given star
-        lc = pd.read_csv(lc_files[0], delimiter=r'\s+', names=['time', 'mag', 'magunc'], dtype=str)
+        # read as str first because we can tell the unit by the length of the time value
+        lc = pd.concat([
+            pd.read_csv(lc_file, delimiter=r'\s+', names=['time', 'mag', 'magunc'], dtype=str)
+            for lc_file in lc_files
+        ])
+        lc.reset_index(drop=True, inplace=True)
 
         # The time column in light curve files are HJD but sometimes shifted by a constant
         # Check the length of one time entry to determine its format
         if len(lc['time'][0]) == 13:  # time is HJD, shift to MJD
             lc['mjd'] = lc['time'].astype(np.float64) - 2400000.5
-        elif len(lc['time'][0]) == 10:  # time is shifted HJD, shift to MJD
+        elif len(lc['time'][0]) in [9, 10]:  # time is shifted HJD, shift to MJD
             lc['mjd'] = lc['time'].astype(np.float64) + 2450000 - 2400000.5
         else:
-            print(f"Unexpected time format for {star_ID} in band {band}. Expected 10 or 13 digits.")
+            print(f"Unexpected time format for {star_ID} in band {band}. Expected 9, 10, or 13 digits.")
             print(f"Found {len(str(lc['time'][0]))} digits in {lc['time'][0]}")
             exit(1)
 
