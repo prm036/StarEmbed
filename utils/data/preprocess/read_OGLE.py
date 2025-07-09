@@ -96,18 +96,28 @@ def load_catalog(region, parent_type, sub_type):
         for feature in extra_features:
             catalog[feature] = np.nan
     elif parent_type == "dsct":
+        # sh is a constant shift in the column positions for different regions relative to blg
+        if region in ["blg", "lmc"]:
+            sh = 0
+        elif region == "smc":
+            sh = -1
+        elif region == "gd":
+            sh = -2
+        else:
+            raise NotImplementedError(f"DSCT {region} not implemented")
+
         colspecs = [
-            (0, 19), (21, 27), (28, 34),
+            (0, 19 + sh), (21 + sh, 27 + sh), (28 + sh, 34 + sh),
             # Period 1 (period, period_unc, time_of_peak, I-band amplitude)
-            (36, 46), (47, 57), (59, 69), (71, 76),
+            (36 + sh, 46 + sh), (47 + sh, 57 + sh), (59 + sh, 69 + sh), (71 + sh, 76 + sh),
             # Period 1 Fourier coefficients
-            (78, 83), (84, 89), (91, 96), (97, 102),
+            (78 + sh, 83 + sh), (84 + sh, 89 + sh), (91 + sh, 96 + sh), (97 + sh, 102 + sh),
             # Period 2
-            (104, 114), (115, 125), (127, 137), (139, 144),
-            (146, 151), (152, 157), (159, 164), (165, 170),
+            (104 + sh, 114 + sh), (115 + sh, 125 + sh), (127 + sh, 137 + sh), (139 + sh, 144 + sh),
+            (146 + sh, 151 + sh), (152 + sh, 157 + sh), (159 + sh, 164 + sh), (165 + sh, 170 + sh),
             # Period 3
-            (172, 182), (183, 193), (195, 205), (207, 212),
-            (214, 219), (220, 225), (227, 232), (234, 238)
+            (172 + sh, 182 + sh), (183 + sh, 193 + sh), (195 + sh, 205 + sh), (207 + sh, 212 + sh),
+            (214 + sh, 219 + sh), (220 + sh, 225 + sh), (227 + sh, 232 + sh), (234 + sh, 238 + sh)
         ]
         catalog = pd.read_fwf(
             region_class_dir + f"{sub_type}.dat", colspecs=colspecs,
@@ -126,7 +136,6 @@ def load_catalog(region, parent_type, sub_type):
     catalog['region'] = region
 
     # Add class column which is combination of parent_type and sub_type
-    # TODO: Formatting depends on type
     if parent_type in ["cep", "rrlyr"]:
         catalog['parent_type'] = parent_type
         catalog['sub_type'] = sub_type
@@ -231,36 +240,40 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
 
     # Define the column widths based on the data format
     # Differences come from regions names and ID numbers having different numbers of digits
-    if (region == "BLG") & (parent_type == "CEP"):
+    # Not always a constant shift in positions, so each needs to be defined separately
+    if parent_type == "CEP":
+        if region == "BLG":
+            sh = 0
+        elif region in ["GD", "LMC", "SMC"]:
+            sh = 1
+
         colspecs = [
-            (0, 16),    # Star ID
-            (17, 25),   # Type
-            (27, 38),   # Right Ascension
-            (39, 50),   # Declination
-            (52, 68),   # OGLE-IV
-            (69, 84),   # OGLE-III
-            (85, 100),   # OGLE-II
-            (101, 120)   # Additional identifiers
+            # Star ID, Type, RA, Dec
+            (0, 16 + sh), (17 + sh, 25 + sh), (27 + sh, 38 + sh), (39 + sh, 50 + sh),
+            # OGLE-II, OGLE-III, OGLE-IV, Additional identifiers
+            (52 + sh, 68 + sh), (69 + sh, 84 + sh), (85 + sh, 100 + sh), (101 + sh, 120 + sh)
         ]
-    elif (region in ["GD", "LMC", "SMC"]) & (parent_type == "CEP"):
+    elif parent_type == "RRLYR":
+        if region in ["BLG", "LMC"]:
+            sh = 0
+        elif region in ["GD", "SMC"]:
+            sh = -1
+        
         colspecs = [
-            (0, 17), (18, 26), (28, 39), (40, 51),
-            (53, 69), (70, 85), (86, 101), (102, 121)
+            (0, 20 + sh), (22 + sh, 26 + sh), (28 + sh, 39 + sh), (40 + sh, 51 + sh),
+            (53 + sh, 69 + sh), (70 + sh, 85 + sh), (86 + sh, 101 + sh), (102 + sh, 121 + sh)
         ]
-    elif (region in ["BLG", "LMC"]) & (parent_type == "RRLYR"):
+    elif parent_type == "DSCT":
+        if region in ["BLG", "LMC"]:
+            sh = 0
+        elif region == "SMC":
+            sh = -1
+        elif region == "GD":
+            sh = -2
+
         colspecs = [
-            (0, 20), (22, 26), (28, 39), (40, 51),
-            (53, 69), (70, 85), (86, 101), (102, 121)
-        ]
-    elif (region in ["GD", "SMC"]) & (parent_type == "RRLYR"):
-        colspecs = [
-            (0, 19), (21, 25), (27, 38), (39, 50),
-            (52, 68), (69, 83), (85, 100), (101, 130)
-        ]
-    elif (region in ["BLG"]) & (parent_type == "DSCT"):
-        colspecs = [
-            (0, 19), (21, 31), (33, 44), (45, 56),
-            (58, 74), (75, 90), (91, 107), (108, 130)
+            (0, 19 + sh), (21 + sh, 31 + sh), (33 + sh, 44 + sh), (45 + sh, 56 + sh),
+            (58 + sh, 74 + sh), (75 + sh, 90 + sh), (91 + sh, 107 + sh), (108 + sh, 130 + sh)
         ]
     else:
         raise NotImplementedError(f"Region {region} and parent type {parent_type} not implemented")
