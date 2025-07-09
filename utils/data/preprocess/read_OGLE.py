@@ -203,7 +203,7 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
     region_class_dir = f"../../../data/ogle4_raw/OCVS/{region.lower()}/{parent_type.lower()}/"
 
     # Define the column widths based on the data format
-    # Regions use either three or four digit numbers in the IDs
+    # Differences come from regions names and ID numbers having different numbers of digits
     if (region == "BLG") & (parent_type == "CEP"):
         colspecs = [
             (0, 16),    # Star ID
@@ -236,6 +236,17 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
             (70, 85),   # OGLE-III
             (86, 101),   # OGLE-II
             (102, 121)   # Additional identifiers
+        ]
+    elif (region in ["GD"]) & (parent_type == "RRLYR"):
+        colspecs = [
+            (0, 19),    # Star ID
+            (21, 25),   # Type
+            (27, 38),   # Right Ascension
+            (39, 50),   # Declination
+            (52, 68),   # OGLE-IV
+            (69, 83),   # OGLE-III
+            (85, 100),   # OGLE-II
+            (101, 130)   # Additional identifiers
         ]
     else:
         raise NotImplementedError(f"Region {region} and parent type {parent_type} not implemented")
