@@ -3,13 +3,14 @@ from multiprocessing import Pool
 from tqdm import tqdm
 import numpy as np
 import argparse
+import random
 import time
 
 from read_OGLE import (
     load_catalog, merge_remarks, merge_ident, read_light_curve, get_period_feature_columns
 )
 
-# Standardized StarEmbed schema with some columns unique to Catalina
+# Standardized StarEmbed schema with some columns unique to OGLE
 band_schema = Features({
     "mjd": Sequence(feature=Value("float64")),
     "target": Sequence(feature=Value("float64")),  # mag
@@ -48,13 +49,21 @@ schema = Features({
 } | {feature: Value("float64") for feature in get_period_feature_columns(3)})
 
 
+def generate_version_hash(n_chars=6):
+    return ''.join(random.choice('abcdefghijklmnopqrstuvwxyz0123456789') for _ in range(n_chars))
+
+
 def create_dataset(num_workers):
     catalogs_to_process = [
         # region, parent_type, sub_type
-        ("blg", "rrlyr", "RRab"),
-        # ("blg", "rrlyr", "RRc"),
-        ("blg", "rrlyr", "RRd"),
+        ("blg", "dsct", "dsct")
     ]
+
+    # with open("OGLE_subtypes.json", "r") as f:
+    #     OGLE_subtypes = json.load(f)
+    # types_to_process = ["CEP", "RRLYR", "DSCT"]
+    # for type in types_to_process:
+    #     catalogs_to_process.extend(OGLE_subtypes[type])
 
     # Create empty lists to store dataset entries
     dataset_entries = []
@@ -120,13 +129,20 @@ def create_dataset(num_workers):
     start_time = time.time()
     print("\nRegistering all stars in a huggingface dataset")
     dataset = Dataset.from_list(dataset_entries, features=schema)
+    dataset.info.description = generate_version_hash(n_chars=6)
+ 
     print(f"Created dataset with {len(dataset_entries)} entries ({time.time() - start_time:.2f}s)")
 
-    print(f"No lightcurve data found for {len(no_lc_ids)} IDs")
+    if len(no_lc_ids) > 0:
+        print(f"No lightcurve data found for {len(no_lc_ids)} IDs")
+    else:
+        print("Found lightcurve data for all stars")
+
     return dataset
 
 
 if __name__ == "__main__":
+    global_start_time = time.time()
     parser = argparse.ArgumentParser(description='Process OGLE data to HuggingFace format')
     parser.add_argument('--num_workers', type=int, default=4,
                         help='Number of workers for parallel processing (default: 4)')
@@ -136,9 +152,8 @@ if __name__ == "__main__":
 
     dataset = create_dataset(num_workers)
     dataset.save_to_disk(
-        "../../../data/ogle4_hf",
+        "../../../data/ogle4",
         num_proc=num_workers,
         max_shard_size="100MB",
-        storage_options={"max_proc": num_workers}  # Multiprocessing doesn't work without this
     )
-    print("Done writing OGLE data to HF format\n")
+    print(f"Done writing OGLE data to HF format ({time.time() - global_start_time:.2f}s)\n")
