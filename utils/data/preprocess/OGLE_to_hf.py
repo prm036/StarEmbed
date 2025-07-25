@@ -4,6 +4,7 @@ from tqdm import tqdm
 import numpy as np
 import argparse
 import time
+import json
 
 from read_OGLE import (
     load_catalog, merge_remarks, merge_ident, read_light_curve, get_period_feature_columns
@@ -47,17 +48,17 @@ schema = Features({
     "dec": Value("string"),
 } | {feature: Value("float64") for feature in get_period_feature_columns(3)})
 
+
 def create_dataset(num_workers):
     catalogs_to_process = [
         # region, parent_type, sub_type
-        ("blg", "dsct", "dsct")
     ]
 
-    # with open("OGLE_subtypes.json", "r") as f:
-    #     OGLE_subtypes = json.load(f)
-    # types_to_process = ["CEP", "RRLYR", "DSCT"]
-    # for type in types_to_process:
-    #     catalogs_to_process.extend(OGLE_subtypes[type])
+    with open("all_OGLE_collections.json", "r") as f:
+        OGLE_collections = json.load(f)
+    types_to_process = ["CEP", "RRLYR", "DSCT", "T2CEP", "ACEP"]
+    for type in types_to_process:
+        catalogs_to_process.extend(OGLE_collections[type])
 
     # Create empty lists to store dataset entries
     dataset_entries = []
