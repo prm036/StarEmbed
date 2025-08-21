@@ -66,6 +66,37 @@ def format_coordinate(coord_str, is_dec=False):
     return ':'.join(formatted_parts)
 
 
+def add_nonstandard_feats_to_remarks(catalog, nonstandard_feat_names):
+    """
+    For each source, add "feat_name=feat_value" for each nonstandard feature
+    to the remarks column. Separate features with " | ".
+    """
+    nonstandard_feats = catalog.loc[:, ['sourceid'] + nonstandard_feat_names]
+    catalog = catalog.drop(columns=nonstandard_feat_names)
+
+    feat_cols = [col for col in nonstandard_feats.columns if col != 'sourceid']
+    # Create a DataFrame of "colname=val" strings
+    remarks_df = nonstandard_feats[feat_cols].apply(
+        lambda col: f"{col.name}=" + col.astype(str), axis=0
+    )
+
+    # Join all features for each row with " | "
+    remarks_series = remarks_df.agg(" | ".join, axis=1)
+
+    # Assign to catalog['remarks'] by matching sourceid
+    catalog = catalog.merge(
+        nonstandard_feats[['sourceid']].assign(remarks=remarks_series),
+        on='sourceid', how='left', suffixes=('', '_new')
+    )
+
+    # Handle the case where remarks_new might not exist due to merge suffixes
+    if 'remarks_new' in catalog.columns:
+        catalog['remarks'] = catalog['remarks_new']
+        catalog = catalog.drop(columns=['remarks_new'])
+    # If no existing remarks column, the merge created 'remarks' directly
+    return catalog
+
+
 def load_catalog(region, parent_type, sub_type):
     """
     Read in an OGLE catalog for a specific region, parent-type, and sub-type and
@@ -207,25 +238,13 @@ def load_catalog(region, parent_type, sub_type):
                 'orbit_ecc', 'orbit_incl', 'arg_peri', 'variability', 'model_flag'
             ]
         )
-        
+
+        # Add non-standard features into remarks column
         nonstandard_feat_names = [
             't_peri_passage', 'orbit_ecc', 'orbit_incl', 'arg_peri', 'variability', 'model_flag'
         ]
-        nonstandard_feats = catalog[['sourceid'] + nonstandard_feat_names].copy()
-        catalog.drop(columns=nonstandard_feat_names, inplace=True)
-        
-        # For each source, add "feat_name=feat_value" for each nonstandard feature
-        # to the remarks column. Separate features with " | "
-        for sourceid in nonstandard_feats['sourceid']:
-            remark = ""
-            for colname in list(nonstandard_feats.columns):
-                if colname == 'sourceid':
-                    continue
-                remark += f"{colname}={nonstandard_feats.loc[nonstandard_feats['sourceid'] == sourceid, colname].values[0]} | "
-            remark = remark[:-3]  # Remove the last ' | '
-            
-            catalog.loc[catalog['sourceid'] == sourceid, 'remarks'] = remark
-            
+        catalog = add_nonstandard_feats_to_remarks(catalog, nonstandard_feat_names)
+
         # Add empty columns to catalog for extra periods
         extra_features = set(get_period_feature_columns(3)) - set(catalog.columns)
         for feature in extra_features:
@@ -249,39 +268,32 @@ def load_catalog(region, parent_type, sub_type):
                 'depth_p_ecl', 'depth_s_ecl'
             ]
         )
-
+        
+        # Add non-standard features into remarks column
         nonstandard_feat_names = [
             'max_mag_I', 'max_mag_V', 't_p_ecl', 'depth_p_ecl', 'depth_s_ecl'
         ]
-        nonstandard_feats = catalog.loc[:, ['sourceid'] + nonstandard_feat_names]
-        catalog.drop(columns=nonstandard_feat_names, inplace=True)
-
-        feat_cols = [col for col in nonstandard_feats.columns if col != 'sourceid']
-        # Create a DataFrame of "colname=val" strings
-        remarks_df = nonstandard_feats[feat_cols].apply(
-            lambda col: f"{col.name}=" + col.astype(str), axis=0
-        )
-
-        # Join all features for each row with " | "
-        remarks_series = remarks_df.agg(" | ".join, axis=1)
-
-        # Assign to catalog['remarks'] by matching sourceid
-        catalog = catalog.merge(
-            nonstandard_feats[['sourceid']].assign(remarks=remarks_series),
-            on='sourceid', how='left', suffixes=('', '_new')
-        )
-        
-        # Handle the case where remarks_new might not exist due to merge suffixes
-        if 'remarks_new' in catalog.columns:
-            catalog['remarks'] = catalog['remarks_new']
-            catalog.drop(columns=['remarks_new'], inplace=True)
-        else:
-            # If no existing remarks column, the merge created 'remarks' directly
-            pass
+        catalog = add_nonstandard_feats_to_remarks(catalog, nonstandard_feat_names)
 
         # Add empty columns to catalog for extra periods
         extra_features = set(get_period_feature_columns(3)) - set(catalog.columns)
         extra_features = list(extra_features) + ['avg_mag_I', 'avg_mag_V']
+        for feature in extra_features:
+            catalog[feature] = np.nan
+    elif parent_type == "rot":
+        catalog = pd.read_csv(
+            region_class_dir + f"{sub_type}.dat", delimiter=r'\s+',
+            names=[
+                'sourceid', 'avg_mag_V', 'p_amp_V', 'avg_mag_I', 'p_amp_I', 'period'
+            ]
+        )
+        
+        # Add non-standard features into remarks column
+        nonstandard_feat_names = ['p_amp_V', 'p_amp_I']
+        catalog = add_nonstandard_feats_to_remarks(catalog, nonstandard_feat_names)
+
+        # Add empty columns to catalog for extra periods
+        extra_features = set(get_period_feature_columns(3)) - set(catalog.columns)
         for feature in extra_features:
             catalog[feature] = np.nan
     else:
@@ -290,13 +302,13 @@ def load_catalog(region, parent_type, sub_type):
     # Replace any "-" in any column with NaN
     catalog = catalog.mask((catalog == "-") | (catalog == ""), np.nan)
 
-    # HBs create the remarks column earlier, but create it now for other classes 
-    if parent_type not in ['hb']:
+    # Certain classes create the remarks column earlier, but create it now for the rest 
+    if 'remarks' not in catalog.columns:
         catalog['remarks'] = ""
     catalog['region'] = region
 
     # Add class column which is combination of parent_type and sub_type
-    if parent_type in ["cep", "rrlyr", "lpv"]:
+    if parent_type in ["cep", "rrlyr", "lpv", "rot"]:
         catalog['parent_type'] = parent_type
         catalog['sub_type'] = sub_type
         catalog['class_str'] = sub_type
@@ -490,21 +502,33 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
             (0      , 19 + sh), (21 + sh, 24 + sh), (25 + sh, 36 + sh), (37 + sh,  48 + sh),
             (50 + sh, 66 + sh), (67 + sh, 82 + sh), (83 + sh, 98 + sh), (99 + sh, 130 + sh)
         ]
+    elif parent_type == "ROT":
+        colspecs = [
+            (0, 19), (19, 30), (31, 42), (43, 59), (60, 76), (77, 93), (94, 130)
+        ]
     else:
         raise NotImplementedError(f"Region {region} and parent type {parent_type} not implemented")
 
     # Missing values are represented by whitespace, so read_fwf must be used in place of pd.read_csv
-    ident = pd.read_fwf(
-        region_class_dir + "ident.dat", colspecs=colspecs,
-        names=['sourceid', 'type', 'ra', 'dec',
-               'OGLE_IV_id', 'OGLE_III_id', 'OGLE_II_id', 'other_id']
-    )
+    # Only ROT has no type column
+    if parent_type != "ROT":
+        ident = pd.read_fwf(
+            region_class_dir + "ident.dat", colspecs=colspecs,
+            names=['sourceid', 'type', 'ra', 'dec',
+                   'OGLE_IV_id', 'OGLE_III_id', 'OGLE_II_id', 'other_id']
+        )
+    else:
+        ident = pd.read_fwf(
+            region_class_dir + "ident.dat", colspecs=colspecs,
+            names=['sourceid', 'ra', 'dec',
+                   'OGLE_IV_id', 'OGLE_III_id', 'OGLE_II_id', 'other_id']
+        )
     
     # HB stars have RA and Dec terms separated by spaces instead of colons
     if parent_type in ["HB"]:
         ident['ra'] = ident['ra'].apply(format_coordinate)
         ident['dec'] = ident['dec'].apply(lambda x: format_coordinate(x, is_dec=True))
-        
+
     # Clean up any whitespace
     ident = ident.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
 
@@ -516,15 +540,10 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
 
     # Set index for fast join
     subtype_df_indexed = subtype_df.set_index('sourceid', drop=False)
-    # Only keep columns that exist in id_to_cols
     merged = subtype_df_indexed.join(id_to_cols, how='left', rsuffix='_ident')
 
-    # Fill missing columns with empty string (to match original behavior)
-    for col in cols_to_copy:
-        if col not in merged.columns:
-            merged[col] = ""
-        else:
-            merged[col] = merged[col].fillna("")
+    # Fill missing columns with empty string
+    merged = merged.fillna("")
 
     # Restore the original index order
     subtype_df[cols_to_copy] = merged[cols_to_copy].values
