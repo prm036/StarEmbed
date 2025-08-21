@@ -513,13 +513,21 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
     if parent_type in ["DSCT", "T2CEP", "ACEP", "HB", "ECL"]:
         cols_to_copy.append('type')
     id_to_cols = ident.set_index('sourceid')[cols_to_copy]
-    subtype_df[cols_to_copy] = ""
 
-    # For each row in subtype_df, look up the corresponding columns from ident using the ID
-    for idx, row in subtype_df.iterrows():
-        if row['sourceid'] in id_to_cols.index:
-            # Add the new columns into the appropriate row in the dataframe
-            subtype_df.loc[idx, cols_to_copy] = id_to_cols.loc[row['sourceid']]
+    # Set index for fast join
+    subtype_df_indexed = subtype_df.set_index('sourceid', drop=False)
+    # Only keep columns that exist in id_to_cols
+    merged = subtype_df_indexed.join(id_to_cols, how='left', rsuffix='_ident')
+
+    # Fill missing columns with empty string (to match original behavior)
+    for col in cols_to_copy:
+        if col not in merged.columns:
+            merged[col] = ""
+        else:
+            merged[col] = merged[col].fillna("")
+
+    # Restore the original index order
+    subtype_df[cols_to_copy] = merged[cols_to_copy].values
 
     if parent_type in ["DSCT", "T2CEP", "ACEP", "HB", "ECL"]:
         subtype_df['sub_type'] = subtype_df['type']

@@ -77,12 +77,20 @@ def create_dataset(num_workers):
         print("  Started catalog-level data")
 
         cat = load_catalog(*catalog_to_process)
+        duration = time.time() - start_time
+        print(f"  Loaded catalog ({duration:.2f}s; {len(cat) / duration:.0f} stars/s)")
+        start_time = time.time()
+        
         cat = merge_remarks(*catalog_to_process, cat)
+        duration = time.time() - start_time
+        print(f"  Merged remarks ({duration:.2f}s; {len(cat) / duration:.0f} stars/s)")
+        start_time = time.time()
+
         cat = merge_ident(*catalog_to_process, cat)
         cat.reset_index(drop=True, inplace=True)
-
-        cat_read_time = time.time()
-        print(f"  Finished catalog-level data ({cat_read_time - start_time:.2f}s)")
+        duration = time.time() - start_time
+        print(f"  Merged ident ({duration:.2f}s; {len(cat) / duration:.0f} stars/s)")
+        print(f"  Finished catalog-level data")
 
         lc_base_dir = f"../../../data/ogle4_raw/OCVS/{region}/{parent_type}/"
         template_lc_glob_path = [
