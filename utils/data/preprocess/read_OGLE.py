@@ -70,6 +70,18 @@ def add_nonstandard_feats_to_remarks(catalog, nonstandard_feat_names):
     """
     For each source, add "feat_name=feat_value" for each nonstandard feature
     to the remarks column. Separate features with " | ".
+
+    Parameters
+    ----------
+    catalog : pd.DataFrame
+        The catalog dataframe containing the sources and their features.
+    nonstandard_feat_names : list of str
+        List of nonstandard feature column names to be added to remarks.
+
+    Returns
+    -------
+    catalog : pd.DataFrame
+        The catalog dataframe with the nonstandard features added to the remarks column.
     """
     nonstandard_feats = catalog.loc[:, ['sourceid'] + nonstandard_feat_names]
     catalog = catalog.drop(columns=nonstandard_feat_names)
@@ -117,16 +129,12 @@ def load_catalog(region, parent_type, sub_type):
     parent_type : str
         The parent type of the OGLE catalog to read in.
         Valid inputs are:
-            TODO: Remove invalid types
-            acep, cep, dsct, ecl, hb, rrlyr, t2cep, lpv, dpv, transits, rot,
-            short_period_ecl
+            acep, cep, dsct, ecl, hb, rrlyr, t2cep, lpv, transits, rot
     sub_type : str
         The sub-type of the OGLE catalog to read in.
         Valid inputs are:
-            TODO: Remove invalid types
             For cep: cep1O, cep1O2O, cep1O2O3O, cep2O3O, cepF, cepF1O
-            For dsct: dsct, dsctspecconf
-            For dpv: DPV
+            For dsct: dsct
             For lpv: Miras
             For ecl: ecl, ell
             For hb: hb
@@ -349,8 +357,6 @@ def merge_remarks(region, parent_type, sub_type, subtype_df):
     region = region.upper()
     parent_type = parent_type.upper()
     region_class_dir = f"../../../data/ogle4_raw/OCVS/{region.lower()}/{parent_type.lower()}/"
-
-    # TODO: Add remark about spec confirmed delta scuti
 
     # If remarks file does not exist, return the dataframe with empty remarks
     remarks_file = region_class_dir + "remarks.txt"
