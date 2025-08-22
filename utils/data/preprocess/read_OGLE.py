@@ -304,6 +304,22 @@ def load_catalog(region, parent_type, sub_type):
         extra_features = set(get_period_feature_columns(3)) - set(catalog.columns)
         for feature in extra_features:
             catalog[feature] = np.nan
+    elif parent_type == "transits":
+        catalog = pd.read_csv(
+            region_class_dir + f"{sub_type}.dat", delimiter=r'\s+',
+            names=[
+                'sourceid', 'avg_mag_I', 'avg_mag_V', 'period', 't_inferior_conj',
+                't_14', 'depth', 'prob_planet', 'SNR'
+            ]
+        )
+        # Add non-standard features into remarks column
+        nonstandard_feat_names = ['t_inferior_conj', 't_14', 'depth', 'prob_planet', 'SNR']
+        catalog = add_nonstandard_feats_to_remarks(catalog, nonstandard_feat_names)
+
+        # Add empty columns to catalog for extra periods
+        extra_features = set(get_period_feature_columns(3)) - set(catalog.columns)
+        for feature in extra_features:
+            catalog[feature] = np.nan
     else:
         raise NotImplementedError(f"Parent type {parent_type} not implemented")
 
@@ -316,7 +332,7 @@ def load_catalog(region, parent_type, sub_type):
     catalog['region'] = region
 
     # Add class column which is combination of parent_type and sub_type
-    if parent_type in ["cep", "rrlyr", "lpv", "rot"]:
+    if parent_type in ["cep", "rrlyr", "lpv", "rot", "transits"]:
         catalog['parent_type'] = parent_type
         catalog['sub_type'] = sub_type
         catalog['class_str'] = sub_type
@@ -510,14 +526,18 @@ def merge_ident(region, parent_type, sub_type, subtype_df):
         ]
     elif parent_type == "ROT":
         colspecs = [
-            (0, 19), (19, 30), (31, 42), (43, 59), (60, 76), (77, 93), (94, 130)
+            (0, 19), (19, 30), (31, 43), (44, 60), (61, 76), (77, 93), (94, 130)
+        ]
+    elif parent_type == "TRANSITS":
+        colspecs = [
+            (0, 12), (13, 24), (25, 36), (37, 53), (54, 69), (70, 85), (86, 131)
         ]
     else:
         raise NotImplementedError(f"Region {region} and parent type {parent_type} not implemented")
 
     # Missing values are represented by whitespace, so read_fwf must be used in place of pd.read_csv
-    # Only ROT has no type column
-    if parent_type != "ROT":
+    # Only ROT and TRANSITS have no type column
+    if parent_type not in ["ROT", "TRANSITS"]:
         ident = pd.read_fwf(
             region_class_dir + "ident.dat", colspecs=colspecs,
             names=['sourceid', 'type', 'ra', 'dec',
