@@ -6,7 +6,7 @@ The Catalina Northern Periodic Variable Star Catalog (CSDR1 PVS) with DR2 photom
 - **Original catalog**: `http://nesssi.cacr.caltech.edu/DataRelease/CatalinaVars.tbl`
 - **Photometry (DR2)**: `http://nesssi.cacr.caltech.edu/DataRelease/AllVar.phot.gz`
 
-See the standardized schema, common preprocessing, and evaluation guidance in `src_clean/datasets/README.md`.
+See the standardized schema, common preprocessing, and evaluation guidance in `datasets/README.md`.
 
 
 ### Download raw data
@@ -46,16 +46,9 @@ python Catalina_to_hf.py \
 - The conversion removes invalid rows, harmonizes coordinates, and maps classes to a consistent taxonomy (Catalina-specific details below).
 
 
-## Catalina-specific schema notes
-
-- Single-band photometry in an unfiltered “clear” passband labeled `C` under `bands_data`.
-- `{band}.target` holds magnitudes; `{band}.past_feat_dynamic_real` stores magnitude uncertainties; `{band}.feat_dynamic_real` stores Δmjd.
-- `avg_mag_V` is taken from the catalog as the average V magnitude.
-
-
 ## Class taxonomy (Catalina)
 
-Mapping applied during conversion:
+Mapping applied during conversion from Drake et al. 2014:
 
 - 1: EW
 - 2: EA
@@ -79,18 +72,8 @@ Mapping applied during conversion:
 ## Catalina-specific preprocessing
 
 - Drop photometry rows with negative `mjd`.
-- Sort each light curve by `mjd`.
 - Filter catalog entries with missing periods (`P[d] == \nodata`).
-- Convert RA (hourangle) and Dec (deg) to decimal degrees.
 - Map integer `class` to `class_str`.
-
-
-## Limitations and notes
-
-- Photometry is single-band (clear, `C`) and unevenly sampled; some stars have sparse coverage.
-- Periods and classes come from the original catalog; labeling noise and class ambiguities may exist.
-- The DR2 photometry file is large; ensure sufficient disk space and memory for conversion.
-- Coordinates are provided for cross-matching, but proper motions are not included.
 
 
 ## License and terms of use
@@ -104,8 +87,3 @@ If you use this dataset, please cite the original survey and this repository:
 
 - Drake, A. J., et al. 2014. “The Catalina Surveys Periodic Variable Star Catalog.” ApJS, 213, 9. arXiv:1405.4290.
 - This repository: please cite per the project’s main `README.md`.
-
-
-## Acknowledgements
-
-We thank the Catalina Sky Survey team for making the data publicly available and the community for tools enabling standardized time-series benchmarks.
