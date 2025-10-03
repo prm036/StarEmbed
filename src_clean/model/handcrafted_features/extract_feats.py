@@ -105,7 +105,7 @@ def calc_LC_features(lc):
     return LC_features
 
 
-def process_batch(batch_data, batch_idx, batch_size, bands_present, FATS_columns, LC_columns):
+def process_batch(batch_data, batch_idx, batch_size, bands_to_process, FATS_columns, LC_columns):
     """Process a batch of astronomical objects and return their features."""
     batch_FATS_features = pd.DataFrame(columns=FATS_columns)
     batch_LC_features = pd.DataFrame(columns=LC_columns)
@@ -121,7 +121,7 @@ def process_batch(batch_data, batch_idx, batch_size, bands_present, FATS_columns
         start_time = time.time()
         # Generalize to any number of bands present
         band_FATS_feats = []
-        for band in bands_present:
+        for band in bands_to_process:
             try:
                 feats = calc_FATS_features(star[band])
             except ValueError:
@@ -133,7 +133,7 @@ def process_batch(batch_data, batch_idx, batch_size, bands_present, FATS_columns
         # Calculate light_curve features for both bands
         start_time = time.time()
         band_LC_feats = []
-        for band in bands_present:
+        for band in bands_to_process:
             try:
                 feats = calc_LC_features(star[band])
             except ValueError:
@@ -146,7 +146,7 @@ def process_batch(batch_data, batch_idx, batch_size, bands_present, FATS_columns
     return batch_FATS_features, batch_LC_features, batch_fats_time, batch_lc_time
 
 
-def compile_handcrafted_features(data, bands_present, FATS_columns, LC_columns, num_workers):
+def compile_handcrafted_features(data, bands_to_process, FATS_columns, LC_columns, num_workers):
     """Compile all handcrafted features for a dataset of astronomical objects."""
     FATS_features = pd.DataFrame(columns=FATS_columns)
     LC_features = pd.DataFrame(columns=LC_columns)
@@ -165,7 +165,7 @@ def compile_handcrafted_features(data, bands_present, FATS_columns, LC_columns, 
         batch = data[i:i + batch_size]
         batches.append((
             batch, i // batch_size, batch_size,
-            bands_present, FATS_columns, LC_columns
+            bands_to_process, FATS_columns, LC_columns
         ))
 
     # Set up progress reporting
@@ -218,34 +218,42 @@ if __name__ == "__main__":
         "--num_workers", type=int, default=4,
         help="Number of worker processes to use for parallel feature extraction"
     )
+    parser.add_argument(
+        "--bands_to_process", type=str,
+        required=False, help='Bands to process (comma-separated list, e.g. "I,V")'
+    )
     args = parser.parse_args()
 
     dataset_path = args.dataset_path
     split = args.split
     num_workers = args.num_workers
+    bands_to_process = args.bands_to_process
 
     # Load dataset
     dataset = load_from_disk(dataset_path)
 
     # Determine which bands are present in the dataset's light curves
-    first_example = dataset[split][0]
-    if "bands_data" not in first_example:
-        raise ValueError("Expected 'bands_data' key in dataset example, but not found.")
-    bands_present = list(first_example["bands_data"].keys())
-    print(f"Bands present in the dataset: {bands_present}")
+    if bands_to_process is not None:
+        bands_to_process = bands_to_process.split(',')
+    else:
+        first_example = dataset[split][0]
+        if "bands_data" not in first_example:
+            raise ValueError("Expected 'bands_data' key in dataset example, but not found.")
+        bands_to_process = list(first_example["bands_data"].keys())
+        print(f"Bands present in the dataset: {bands_to_process}")
 
     # Prepare column names for FATS and LC features
     FATS_columns = [
-        band + '_' + feat_name for band in bands_present for feat_name in FATS_feature_names
+        band + '_' + feat_name for band in bands_to_process for feat_name in FATS_feature_names
     ]
     LC_columns = [
-        band + '_' + feat_name for band in bands_present for feat_name in LC_extractor.names
+        band + '_' + feat_name for band in bands_to_process for feat_name in LC_extractor.names
     ]
 
     # Process the specified split
     print(f"Processing {split} split...")
     hc_feats = compile_handcrafted_features(
-        dataset[split], bands_present, FATS_columns, LC_columns, num_workers
+        dataset[split], bands_to_process, FATS_columns, LC_columns, num_workers
     )
 
     # Save results
