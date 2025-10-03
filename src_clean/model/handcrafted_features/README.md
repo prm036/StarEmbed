@@ -82,7 +82,7 @@ The `light_curve` library provides 27 additional features optimized for astronom
 - **Repository**: [FATS on GitHub](https://github.com/isadoranun/FATS)
 
 ### Light Curve Library  
-- **Mowlavi, N. et al.** (2018): "Gaia Data Release 2: Variable stars in the colour-absolute magnitude diagram" - Demonstrates the application of light curve features in large-scale astronomical surveys.
+- **Malanchev, K. et al.** (2021): "Anomaly detection in the Zwicky Transient Facility DR3" – Introducing a comprehensive set of statistical and variability features to detect anomalies in ZTF DR3
 - **Repository**: [light_curve on GitHub](https://github.com/light-curve/light-curve-python)
 - **Rust Implementation**: [light-curve-feature](https://docs.rs/light-curve-feature) - High-performance Rust implementation
 
@@ -121,6 +121,8 @@ python extract_feats.py --split validation --dataset_path ../../data/catalina --
 #### Required Arguments
 - `--split`: Dataset split to process (`train`, `validation`, `test`, or `anom`)
 - `--dataset_path`: Path to the HuggingFace dataset directory on disk
+- `--output_path`: Path to save the extracted features as a hugging face dataset
+
 
 #### Optional Arguments
 - `--num_workers`: Number of worker processes for parallel processing (default: 4)
