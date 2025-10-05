@@ -15,6 +15,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix, classification_report
 import pickle
 import random
+import time
 
 # Add src_clean directory to path to find benchmark.utils
 script_dir = os.path.dirname(os.path.abspath(__file__))  # /path/to/benchmark/classification/
@@ -23,7 +24,7 @@ src_clean_dir = os.path.dirname(benchmark_dir)           # /path/to/src_clean/
 sys.path.append(src_clean_dir)
 
 # Import unified utilities
-from benchmark.utils import remove_outliers, add_label_indices
+from benchmark.utils import remove_outliers, add_label_indices, compute_embedding
 
 def check_nan_stats(X, name="dataset"):
     total_points = X.shape[0]
@@ -37,42 +38,56 @@ def check_nan_stats(X, name="dataset"):
 
 class ScenarioDataset:
     def __init__(self, hf_ds, scenario="avg", label_key="label_idx"):
-        assert scenario in ("concat", "avg", "g", "r")
+        assert scenario in ("concat", "avg", "g", "r", "i", "z")  # Added more bands
         self.ds, self.scenario, self.lkey = hf_ds, scenario, label_key
     def __len__(self): return len(self.ds)
     def __getitem__(self, idx):
-        rec   = self.ds[idx]
-        if "embeddings_g" in rec:
-            emb_g = np.squeeze(np.array(rec["embeddings_g"], dtype=np.float32))
-            emb_r = np.squeeze(np.array(rec["embeddings_r"], dtype=np.float32))
-            if emb_g.ndim > 1:
-                avg_g, avg_r = emb_g.mean(0), emb_r.mean(0)
-            else:
-                avg_g, avg_r = emb_g, emb_r
-        else:
-            emb_g = np.squeeze(np.array(rec["g_embedding"], dtype=np.float32))
-            emb_r = np.squeeze(np.array(rec["r_embedding"], dtype=np.float32))
-            avg_g, avg_r = emb_g, emb_r
-        if   self.scenario == "concat": x_np = np.concatenate([avg_g, avg_r], 0)
-        elif self.scenario == "avg":    x_np = 0.5 * (avg_g + avg_r)
-        elif self.scenario == "g":      x_np = avg_g
-        else:                           x_np = avg_r
+        rec = self.ds[idx]
+        # Use main unified embedding function - now handles pre-computed avg_embedding!
+        x_np = compute_embedding(rec, band_combination=self.scenario, hand_crafted=False, return_format="combined")
         return x_np, rec[self.lkey]
 
 def prepare_numpy_data(hf_train, hf_val, hf_test, scenario):
+    """Prepare numpy arrays - ULTRA FAST with pre-computed combined_embedding!"""
     def to_numpy(hf_ds, name):
-        X, y = [], []
-        for rec in ScenarioDataset(hf_ds, scenario):
-            X.append(rec[0])
-            y.append(rec[1])
-        X = np.array(X)
-        y = np.array(y)
+        start_time = time.time()
+        
+        # Check if we have pre-computed combined_embedding
+        if len(hf_ds) > 0 and "combined_embedding" in hf_ds[0]:
+            print(f"[ULTRA FAST] {name}: Using pre-computed combined_embedding (no compute_embedding calls!)")
+            # Direct extraction - no compute_embedding calls needed!
+            X = np.array([rec["combined_embedding"] for rec in hf_ds], dtype=np.float32)
+            y = np.array([rec["label_idx"] for rec in hf_ds])
+            
+        else:
+            # Fallback to old method if combined_embedding not available
+            print(f"[FALLBACK] {name}: combined_embedding not found, using compute_embedding with scenario '{scenario}'...")
+            X, y = [], []
+            
+            for i in range(len(hf_ds)):
+                rec = hf_ds[i]
+                try:
+                    x_np = compute_embedding(rec, band_combination=scenario, return_format="combined")
+                    X.append(x_np)
+                    y.append(rec["label_idx"])
+                except Exception as e:
+                    print(f"[Warning] Skipping sample {i}: {e}")
+                    continue
+            
+            X = np.array(X)
+            y = np.array(y)
+        
         # Remove rows with NaN/Inf
         mask = np.all(np.isfinite(X), axis=1)
         removed = np.sum(~mask)
         if removed > 0:
             print(f"[Clean] {name}: Removed {removed}/{len(X)} samples with NaN/Inf ({removed/len(X)*100:.2f}%).")
+        
+        elapsed = time.time() - start_time
+        print(f"[Timing] {name}: Processed {len(hf_ds)} samples in {elapsed:.2f}s ({len(hf_ds)/elapsed:.1f} samples/sec)")
+        
         return X[mask], y[mask]
+    
     X_train, y_train = to_numpy(hf_train, "train")
     X_val, y_val = to_numpy(hf_val, "val")
     X_test, y_test = to_numpy(hf_test, "test")
@@ -127,8 +142,11 @@ def train_knn(X_train, y_train, X_test, y_test, out_dir, text_labels, k=5):
 # ---------- Main ---------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scenario", type=str, default="avg")
-    parser.add_argument("--input_embs", type=str, default="/projects/p32795/weijian/embs/csdr1_raw_embs_moiral_small_trn_val_tst_ctx200_pdt64_psz16_bandgr")
+    parser.add_argument("--scenario", type=str, default="avg", 
+                       choices=["concat", "avg", "g", "r", "i", "z"],
+                       help="How to combine embeddings: concat, avg, or specific band (ignored if combined_embedding exists)")
+    parser.add_argument("--input_embs", type=str, 
+                       default="/projects/b1094/StarEmbed/embeddings/descriptive_name_embeddings/csdr1_raw_embs_moiral_small_trn_val_tst_ctx200_pdt64_psz16_bandgr")
     parser.add_argument("--out_dir", type=str, default=f"linear_results")
     parser.add_argument("--hand_crafted", type=bool, default=False)
     parser.add_argument("--k", type=int, default=5, help="k for kNN")
@@ -140,12 +158,13 @@ if __name__ == "__main__":
     np.random.seed(args.seed)
 
     # Create output directory under the specified base path
-    base_output_dir = "/projects/b1094/StarEmbed/src/output/linear_classification"
+    base_output_dir = "/projects/b1094/StarEmbed/src/output/linear_classification/new_avg_embedding"
     experiment_name = f"{args.input_embs.split('/')[-1]}_{args.scenario}_seed{args.seed}"
     args.out_dir = os.path.join(base_output_dir, experiment_name)
 
     os.makedirs(args.out_dir, exist_ok=True)
     
+    print("Star loading dataset")
     # Load and clean dataset using unified utilities
     ds = load_from_disk(args.input_embs)
     ds = remove_outliers(ds, hand_crafted=args.hand_crafted)

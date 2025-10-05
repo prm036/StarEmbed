@@ -31,7 +31,6 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import random
 import pathlib
-from functools import partial
 import logging
 import traceback
 
@@ -41,7 +40,7 @@ benchmark_dir = os.path.dirname(script_dir)
 src_clean_dir = os.path.dirname(benchmark_dir)
 sys.path.append(src_clean_dir)
 
-from benchmark.utils import remove_outliers, add_label_indices, cal_avg_embedding
+from benchmark.utils import remove_outliers, add_label_indices, compute_embedding_batch, compute_embedding
 
 # logger to save results to file
 logging.basicConfig(level=logging.INFO)
@@ -63,8 +62,9 @@ def parse_args():
                    help="Which split to process (all combines train+validation+test into one dataset)")
     p.add_argument("--classes", type=str, default="all",
                    help="Comma-separated list of original class labels to include, or 'all' for no filtering")
-    p.add_argument("--concat-embs", type=int, default=1,
-                   help="Concatenate embeddings of different bands, if not, do average")
+    p.add_argument("--scenario", type=str, default="concat", 
+                   choices=["concat", "avg", "g", "r", "i", "z"],
+                   help="How to combine multi-band embeddings: concat, avg, or specific band (default: concat)")
     p.add_argument("--hand-crafted", type=int, default=0, help="Use hand-crafted features for clustering")
     p.add_argument("--standardize", type=int, default=0, 
                    help="Apply StandardScaler to features before clustering and t-SNE (0=False, 1=True)")
@@ -183,34 +183,7 @@ def plot_tsne(X, labels, title, perplexity, seed, save_dir=None):
         print(f"Displaying t-SNE plot for {title}")
         plt.show()
 
-def cal_avg_embedding(example, concat=False, hand_crafted=False):
-    # print(len(example['embeddings_g']))
-    # print(f"example['embeddings_g']: {np.array(example['embeddings_g']).shape}, example['embeddings_r']: {np.array(example['embeddings_r']).shape}")
-    # shape of example['embeddings_g'] is (1, 201, 256)
-    if 'embeddings_g' in example:
-        embs_g = example['embeddings_g']
-        embs_r = example['embeddings_r']
-    else:
-        embs_g = example['g_embedding']
-        embs_r = example['r_embedding']
-    if len(embs_g) == 1:
-        avg_embedding_g = np.mean(np.array(embs_g).squeeze(0), axis=0)
-        avg_embedding_r = np.mean(np.array(embs_r).squeeze(0), axis=0)
-    else:
-        if not hand_crafted:
-            avg_embedding_g = np.mean(np.array(embs_g), axis=0)
-            avg_embedding_r = np.mean(np.array(embs_r), axis=0)
-        else:
-            avg_embedding_g = np.array(embs_g)
-            avg_embedding_r = np.array(embs_r)
-    if concat:
-        avg_embedding = np.concatenate([avg_embedding_g, avg_embedding_r])
-        # print(f"avg_embedding_g: {avg_embedding_g.shape}, avg_embedding_r: {avg_embedding_r.shape}, avg_embedding: {avg_embedding.shape}")
-    else:
-        avg_embedding = np.mean(np.array([avg_embedding_g, avg_embedding_r]), axis=0)
-        # print(f"avg_embedding_g: {avg_embedding_g.shape}, avg_embedding_r: {avg_embedding_r.shape}, avg_embedding: {avg_embedding.shape}")
-    example['avg_embedding'] = avg_embedding
-    return example
+# Note: cal_avg_embedding function is now imported from utils.py for unified processing
 
 """
 split: train, Number of examples with nan: 1
@@ -231,7 +204,7 @@ def main():
 
     # Create output directory - use the specified path directly
     input_emb_name = pathlib.Path(args.dataset_dir).name
-    experiment_name = f"{input_emb_name}_{args.mode}_c{args.concat_embs}_std{args.standardize}_p{args.perplexity}_seed{args.random_state}"
+    experiment_name = f"{input_emb_name}_{args.mode}_{args.scenario}_std{args.standardize}_p{args.perplexity}_seed{args.random_state}"
     result_dir = os.path.join(args.output_dir, experiment_name)
     
     # Create the directory structure
@@ -254,15 +227,69 @@ def main():
     ds = load_from_disk(args.dataset_dir)
     ds = remove_outliers(ds, hand_crafted=bool(args.hand_crafted))
 
-    # calculate the average embedding for clustering
-    for split in ds.keys():
-        ds[split] = ds[split].map(partial(cal_avg_embedding, concat=bool(args.concat_embs), hand_crafted=bool(args.hand_crafted)), remove_columns=["bands_data"], num_proc=8)
+    # Check if pre-computed avg_embedding exists (NEW FORMAT)
+    sample_example = ds[list(ds.keys())[0]][0]
+    if "avg_embedding" in sample_example and sample_example["avg_embedding"] is not None:
+        print("Step 1.5: Found pre-computed avg_embedding - using fast extraction...")
+        logger.info("Step 1.5: Found pre-computed avg_embedding - using fast extraction...")
+        
+        # Use the unified compute_embedding function to extract from pre-computed avg_embedding
+        for split in ds.keys():
+            ds[split] = ds[split].map(
+                lambda example: {
+                    **example,
+                    'combined_embedding': compute_embedding(
+                        example, 
+                        band_combination=args.scenario,
+                        return_format="combined"
+                    )
+                },
+                desc=f"Extracting {args.scenario} embeddings from pre-computed avg_embedding [{split}]"
+            )
+        
+    else:
+        print("Step 1.5: No pre-computed avg_embedding found - computing from scratch...")
+        logger.info("Step 1.5: No pre-computed avg_embedding found - computing from scratch...")
+        
+        # Fallback to heavy computation for old format
+        for split in ds.keys():
+            ds[split] = ds[split].map(
+                lambda batch: compute_embedding_batch(
+                    batch,
+                    band_combination=args.scenario,
+                    hand_crafted=bool(args.hand_crafted),
+                    target_bands=['g','r']  # auto-detect available bands
+                ),
+                batched=True,
+                batch_size=1000,  # Process 1000 examples at once with vectorized ops
+                remove_columns=["bands_data"], 
+            )
+        # from functools import partial
+
+        # def _batch_embed_fn(batch, band_combination, hand_crafted):
+        #     return compute_embedding_batch(
+        #         batch,
+        #         band_combination=band_combination,
+        #         hand_crafted=hand_crafted
+        #     )
+
+        # fn = partial(_batch_embed_fn,
+        #             band_combination=args.scenario,
+        #             hand_crafted=bool(args.hand_crafted))
+
+        # ds[split] = ds[split].map(
+        #     fn,
+        #     batched=True,
+        #     batch_size=1000,
+        #     num_proc=8,
+        # )
+
 
     # Step 2: Add label indices using unified utility
     print("Step 2: Building label2idx mapping and saving original labels...")
     logger.info("Step 2: Building label2idx mapping and saving original labels...")
     
-    # Use unified label mapping utility
+    # add "label_idx" column to the dataset splits
     ds, label2idx, orig_labels = add_label_indices(ds, num_proc=8, sort_labels=True)
     print(f"Automatic label order: {orig_labels}")
     logger.info(f"Automatic label order: {orig_labels}")
@@ -275,16 +302,22 @@ def main():
     print("Step 3: Converting embeddings & labels to NumPy arrays...")
     logger.info("Step 3: Converting embeddings & labels to NumPy arrays...")
     
-    # Only set format for splits that have label_idx (standard splits)
+    # Only set format for splits that have label_idx (standard splits)  
     standard_splits = [split for split in ds.keys() if split in ['train', 'validation', 'test']]
-    for split in standard_splits:
-        ds[split].set_format(type='numpy', columns=['avg_embedding','label_idx'])
     
-    X_train     = np.vstack(ds['train']['avg_embedding'])
+    # Use combined_embedding (new) or avg_embedding (fallback)
+    embedding_column = 'combined_embedding' if 'combined_embedding' in ds['train'].features else 'avg_embedding'
+    print(f"Step 3: Using embedding column: {embedding_column}")
+    logger.info(f"Step 3: Using embedding column: {embedding_column}")
+    
+    for split in standard_splits:
+        ds[split].set_format(type='numpy', columns=[embedding_column, 'label_idx'])
+    
+    X_train     = np.vstack(ds['train'][embedding_column])
     y_train_idx = np.array(ds['train']['label_idx'])
-    X_test      = np.vstack(ds['test']['avg_embedding'])
+    X_test      = np.vstack(ds['test'][embedding_column])
     y_test_idx  = np.array(ds['test']['label_idx'])
-    X_valid     = np.vstack(ds['validation']['avg_embedding'])
+    X_valid     = np.vstack(ds['validation'][embedding_column])
     y_valid_idx = np.array(ds['validation']['label_idx'])
 
     # Step 4: Filter by class subset

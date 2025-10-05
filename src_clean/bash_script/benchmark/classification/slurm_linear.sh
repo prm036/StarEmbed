@@ -2,8 +2,8 @@
 #SBATCH --account=p32626
 #SBATCH --job-name=linear_classification
 #SBATCH --nodes=1
-#SBATCH --output=/projects/b1094/StarEmbed/src/output/log/%x_%A_%a.out
-#SBATCH --error=/projects/b1094/StarEmbed/src/output/log/%x_%A_%a.err
+#SBATCH --output=/projects/b1094/StarEmbed/src/output/log/classification/%x_%A_%a.out
+#SBATCH --error=/projects/b1094/StarEmbed/src/output/log/classification/%x_%A_%a.err
 #SBATCH --time=1:00:00      
 #SBATCH --partition=gengpu   
 #SBATCH --gres=gpu:h100:1      

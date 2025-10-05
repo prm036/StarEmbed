@@ -26,7 +26,7 @@ benchmark_dir = os.path.dirname(script_dir)
 src_clean_dir = os.path.dirname(benchmark_dir)
 sys.path.append(src_clean_dir)
 
-from benchmark.utils import remove_outliers, add_label_indices, process_embeddings_batch
+from benchmark.utils import remove_outliers, add_label_indices, compute_embedding_batch, get_available_bands
 
 
 def parse_args():
@@ -48,6 +48,9 @@ def parse_args():
                    help="Random seed for reproducibility")
     p.add_argument("--output-dir", type=str, default="/projects/b1094/StarEmbed/src/output/rf",
                    help="Output directory for results (will be created if it doesn't exist)")
+    p.add_argument("--scenario", type=str, default="concat", 
+                   choices=["concat", "avg", "g", "r", "i", "z"],
+                   help="How to combine multi-band embeddings (default: concat)")
     return p.parse_args()
 
 
@@ -140,18 +143,20 @@ def main():
             standard_splits = ['train', 'validation', 'test']
             for split in standard_splits:
                 if split in ds:
-                    # Use batch processing for all types of embeddings
+                    # Use main batch function directly (no wrapper needed!)
                     ds[split] = ds[split].map(
-                        partial(process_embeddings_batch, hand_crafted=bool(args.hand_crafted)), 
+                        partial(compute_embedding_batch, 
+                               band_combination=args.scenario,
+                               hand_crafted=bool(args.hand_crafted)), 
                         batched=True,
                         batch_size=1000,  # Process 1000 examples at a time
                         num_proc=6,
-                    )
+                    ) # after this the batch will have column "combined_embedding"
 
         # Label mapping is already applied by add_label_indices()
 
-        # Set format - now both handcrafted and learned embeddings use same column names
-        format_columns = ["g_embedding", "r_embedding", "class_str", "label_idx"]
+        # Set format - now using unified combined embeddings like other scripts
+        format_columns = ["combined_embedding", "class_str", "label_idx"]  
         for split in ['train', 'validation', 'test']:
             if split in ds:
                 ds[split].set_format(type="numpy", columns=format_columns)
@@ -159,11 +164,12 @@ def main():
         def batched_xy(split):
             """
             Returns X, y as 2-D (n_samples, dim) and 1-D (n_samples,) NumPy arrays.
-            Uses g_embedding and r_embedding columns for both handcrafted and learned embeddings.
+            Uses the unified combined_embedding that respects the band_combination strategy.
             """
-            # Both handcrafted and learned embeddings now use the same column names
-            X = np.concatenate([ds[split]["g_embedding"], ds[split]["r_embedding"]], axis=1)
+            # Use the pre-computed combined embeddings (much simpler!)
+            X = np.vstack(ds[split]["combined_embedding"])
             y = ds[split]["label_idx"]
+            print(f"Split '{split}': Using scenario '{args.scenario}' → shape {X.shape}")
             return X, y
 
         X_train, y_train = batched_xy("train")

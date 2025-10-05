@@ -33,7 +33,7 @@ benchmark_dir = os.path.dirname(script_dir)
 src_clean_dir = os.path.dirname(benchmark_dir)
 sys.path.append(src_clean_dir)
 
-from benchmark.utils import remove_outliers, add_label_indices
+from benchmark.utils import remove_outliers, add_label_indices, compute_embedding
 
 
 # ---------- 0) helpers --------------------------------------------------------
@@ -47,34 +47,17 @@ class ScenarioDataset(Dataset):
     def __len__(self):  return len(self.ds)
 
     def __getitem__(self, idx):
-        rec   = self.ds[idx]
-        if "embeddings_g" in rec:
-            emb_g = np.squeeze(np.array(rec["embeddings_g"], dtype=np.float32))
-            emb_r = np.squeeze(np.array(rec["embeddings_r"], dtype=np.float32))
-            if emb_g.ndim > 1:
-                avg_g, avg_r = emb_g.mean(0), emb_r.mean(0)
-            else:
-                avg_g, avg_r = emb_g, emb_r
-        else:
-            emb_g = np.squeeze(np.array(rec["g_embedding"], dtype=np.float32))
-            emb_r = np.squeeze(np.array(rec["r_embedding"], dtype=np.float32))
-            avg_g, avg_r = emb_g, emb_r
+        rec = self.ds[idx]
         try:
-            if   self.scenario == "concat": x_np = np.concatenate([avg_g, avg_r], 0)
-            elif self.scenario == "avg":    x_np = 0.5 * (avg_g + avg_r)
-            elif self.scenario == "g":      x_np = avg_g
-            else:                           x_np = avg_r
+            # Use main unified embedding function directly (no wrapper needed!)
+            x_np = compute_embedding(rec, band_combination=self.scenario, hand_crafted=False, 
+                                   scaler=self.scaler, return_format="combined")
         except:
             print(f"Error in __getitem__: {idx}")
             print(f"rec: {rec}")
-            print(f"shapes: emb_g: {emb_g.shape}, emb_r: {emb_r.shape}, avg_g: {avg_g.shape}, avg_r: {avg_r.shape}")
             raise
 
-        # Apply StandardScaler (trained on train split only)
-        if self.scaler is not None:
-            x_np = self.scaler.transform(x_np.reshape(1, -1)).astype(np.float32).ravel()
-
-        return torch.from_numpy(x_np), torch.tensor(rec[self.lkey], dtype=torch.long)
+        return torch.from_numpy(x_np.astype(np.float32)), torch.tensor(rec[self.lkey], dtype=torch.long)
 
 
 class MLP(nn.Module):

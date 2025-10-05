@@ -2,11 +2,11 @@
 Unified utility functions for benchmark scripts.
 Provides consistent embedding processing for different types of embeddings:
 - Time series foundation model embeddings (Chronos, Moirai, Astromer) with time dimension
-- Handcrafted features (no time dimension)
+- Handcrafted features (no time dimension)  
 - Pre-computed/random embeddings (already processed)
 """
 import numpy as np
-from typing import Dict, Any, Union, Tuple
+from typing import Dict, Any, Union, Tuple, List
 from functools import partial
 
 
@@ -48,184 +48,248 @@ def get_available_bands(example: Dict[str, Any]) -> list:
     return ['g', 'r']
 
 
-def process_embeddings(
+def compute_embedding(
     example: Dict[str, Any], 
-    scenario: str = "avg", 
+    band_combination: str = "avg", 
     hand_crafted: bool = False,
-    return_separate: bool = True,
-    target_bands: list = None
-) -> Dict[str, Any]:
+    target_bands: list = None,
+    scaler=None,
+    return_format: str = "combined"
+) -> Union[np.ndarray, Dict[str, Any]]:
     """
-    Unified function to process embeddings from different sources with support for any bands.
+    **THE MAIN UNIFIED EMBEDDING FUNCTION**
+    
+    This is the single function that ALL scripts should use for embedding processing.
+    Handles pre-computed avg_embedding, time averaging, band combination, and multi-band support.
     
     Args:
         example: Dictionary containing embedding data
-        scenario: How to combine bands - "concat", "avg", or specific band name
-        hand_crafted: Whether the embeddings are handcrafted features
-        return_separate: If True, return {band}_embedding for each band separately
-                        If False, return combined avg_embedding
+        band_combination: How to combine bands - "concat", "avg", or specific band name ("g", "r", "i", "z")
+        hand_crafted: Whether the embeddings are handcrafted features (no time dimension)
         target_bands: Specific bands to use (default: auto-detect from data)
+        scaler: Optional StandardScaler for normalization
+        return_format: "combined" returns just the embedding array, "dict" returns dict with embedding added
     
     Returns:
-        Dictionary with processed embeddings added
+        If return_format="combined": numpy array of combined embedding
+        If return_format="dict": example dict with 'avg_embedding' field added
     """
+    
+    # **NEW**: Check if avg_embedding is already computed (fast path)
+    if "avg_embedding" in example and example["avg_embedding"] is not None:
+        avg_emb = example["avg_embedding"]
+        
+        if band_combination == "concat":
+            # Concatenate all available bands in sorted order
+            vectors = []
+            for band in sorted(avg_emb.keys()):
+                if avg_emb[band] is not None:
+                    vectors.append(np.array(avg_emb[band], dtype=np.float32))
+            combined_embedding = np.concatenate(vectors) if vectors else None
+            
+        elif band_combination == "avg":
+            # Average all available bands
+            vectors = []
+            for band in avg_emb.keys():
+                if avg_emb[band] is not None:
+                    vectors.append(np.array(avg_emb[band], dtype=np.float32))
+            combined_embedding = np.mean(vectors, axis=0) if vectors else None
+            
+        elif band_combination in avg_emb:
+            # Return specific band
+            if avg_emb[band_combination] is not None:
+                combined_embedding = np.array(avg_emb[band_combination], dtype=np.float32)
+            else:
+                combined_embedding = None
+        else:
+            # Fallback to first available band
+            available_bands = [b for b in avg_emb.keys() if avg_emb[b] is not None]
+            if available_bands:
+                combined_embedding = np.array(avg_emb[available_bands[0]], dtype=np.float32)
+            else:
+                combined_embedding = None
+        
+        if combined_embedding is None:
+            raise ValueError(f"No valid embedding data found in avg_embedding for combination '{band_combination}'")
+        
+        # Apply scaling if provided
+        if scaler is not None:
+            combined_embedding = scaler.transform(combined_embedding.reshape(1, -1)).flatten()
+        
+        # Return in requested format
+        if return_format == "combined":
+            return combined_embedding
+        else:  # return_format == "dict"
+            example['combined_embedding'] = combined_embedding
+            return example
+    
+    # **FALLBACK**: Original processing for datasets without avg_embedding
     # Auto-detect available bands if not specified
     if target_bands is None:
         target_bands = get_available_bands(example)
     
-    # Validate scenario
-    valid_scenarios = ["concat", "avg"] + target_bands
-    assert scenario in valid_scenarios, f"Invalid scenario: {scenario}. Valid options: {valid_scenarios}"
+    # Validate band_combination
+    valid_combinations = ["concat", "avg"] + target_bands
+    if band_combination not in valid_combinations:
+        print(f"Warning: '{band_combination}' not in {valid_combinations}, using first available band")
+        band_combination = target_bands[0] if target_bands else "g"
     
-    # Step 1: Extract and process embeddings for each available band
-    processed_embeddings = {}
+    # Step 1: Process each available band
+    processed_bands = {}
     
     for band in target_bands:
-        # Try different naming patterns for embeddings
+        # Extract raw embedding data
         emb_raw = None
-        
-        # Pattern 1: embeddings_{band} (raw time series)
         if f"embeddings_{band}" in example:
             emb_raw = example[f"embeddings_{band}"]
-        # Pattern 2: {band}_embedding (pre-computed)
         elif f"{band}_embedding" in example:
             emb_raw = example[f"{band}_embedding"]
         
         if emb_raw is None:
-            print(f"Warning: No embedding data found for band '{band}', skipping...")
             continue
             
-        # Step 2: Convert to numpy and squeeze
-        emb_array = np.squeeze(np.array(emb_raw, dtype=np.float32))
+        # Convert to numpy array
+        emb_array = np.array(emb_raw, dtype=np.float32)
         
-        # Step 3: Handle time dimension averaging for time series embeddings
+        # Handle different data formats
         if hand_crafted:
-            # Handcrafted features: use directly (no time dimension)
-            avg_emb = emb_array
+            # Handcrafted features: use directly
+            processed_emb = emb_array
         else:
-            # Time series or pre-computed embeddings
-            if emb_array.ndim > 1:
-                # Time series embeddings: average over time dimension
-                avg_emb = emb_array.mean(0)
-            else:
-                # Pre-computed/random embeddings: use directly
-                avg_emb = emb_array
+            # Foundation model embeddings: handle time averaging
+            if emb_array.ndim == 3:  # Shape: (1, time, dim)
+                processed_emb = np.mean(emb_array.squeeze(0), axis=0)
+            elif emb_array.ndim == 2:  # Shape: (time, dim)
+                processed_emb = np.mean(emb_array, axis=0)
+            else:  # Shape: (dim,) - already processed
+                processed_emb = emb_array
         
-        processed_embeddings[band] = avg_emb
-        
-        # Step 4: Store processed embeddings separately if requested
-        if return_separate:
-            example[f'{band}_embedding'] = avg_emb
+        processed_bands[band] = processed_emb
     
-    # Step 5: Combine bands according to scenario
-    if len(processed_embeddings) == 0:
+    # Step 2: Combine bands
+    if len(processed_bands) == 0:
         raise ValueError("No valid embedding data found for any band")
     
-    if scenario == "concat":
+    if band_combination == "concat":
         # Concatenate all available bands in sorted order
-        sorted_bands = sorted(processed_embeddings.keys())
-        combined = np.concatenate([processed_embeddings[band] for band in sorted_bands], axis=0)
-    elif scenario == "avg":
-        # Average all available bands
-        band_arrays = list(processed_embeddings.values())
-        combined = np.mean(band_arrays, axis=0)
-    elif scenario in processed_embeddings:
+        sorted_bands = sorted(processed_bands.keys())
+        combined_embedding = np.concatenate([processed_bands[band] for band in sorted_bands])
+    elif band_combination == "avg":
+        # Element-wise average of all bands
+        band_arrays = list(processed_bands.values())
+        combined_embedding = np.mean(band_arrays, axis=0)
+    elif band_combination in processed_bands:
         # Use specific band
-        combined = processed_embeddings[scenario]
+        combined_embedding = processed_bands[band_combination]
     else:
-        # Fallback to first available band if requested band not found
-        first_band = sorted(processed_embeddings.keys())[0]
-        print(f"Warning: Band '{scenario}' not found, using '{first_band}' instead")
-        combined = processed_embeddings[first_band]
+        # Fallback to first available band
+        sorted_bands = sorted(processed_bands.keys())
+        combined_embedding = processed_bands[sorted_bands[0]]
     
-    if not return_separate:
-        # Store combined embedding (for clustering)
-        example['avg_embedding'] = combined
-    else:
-        # Store combined for scenario-based processing
-        example['combined_embedding'] = combined
+    # Step 3: Apply scaling if provided
+    if scaler is not None:
+        combined_embedding = scaler.transform(combined_embedding.reshape(1, -1)).flatten()
     
-    return example
+    # Step 4: Return in requested format
+    if return_format == "combined":
+        return combined_embedding
+    else:  # return_format == "dict"
+        example['avg_embedding'] = combined_embedding
+        return example
 
 
-def process_embeddings_batch(
+def compute_embedding_batch(
     batch: Dict[str, Any], 
+    band_combination: str = "concat",
     hand_crafted: bool = False,
-    target_bands: list = None
+    target_bands: list = None,
+    return_format: str = "dict"
 ) -> Dict[str, Any]:
     """
-    Batch version for faster processing of multiple examples with support for any bands.
+    **TRUE VECTORIZED BATCH PROCESSING**
+    
+    Processes entire batches efficiently using vectorized numpy operations.
+    This is the proper way to use batched=True for performance gains.
     
     Args:
         batch: Dictionary containing batch of embedding data
+        band_combination: How to combine bands - "concat", "avg", or specific band
         hand_crafted: Whether the embeddings are handcrafted features
-        target_bands: Specific bands to process (default: auto-detect from first example)
-    
+        target_bands: Specific bands to use (auto-detect if None)
+        
     Returns:
-        Dictionary with processed {band}_embedding arrays for each available band
+        Dictionary with 'avg_embedding' containing processed embeddings for all examples
     """
     # Auto-detect available bands from first example if not specified
+    print("auto-detecting bands...")
     if target_bands is None:
         first_example = {key: batch[key][0] if isinstance(batch[key], list) and len(batch[key]) > 0 else batch[key] 
                         for key in batch.keys()}
         target_bands = get_available_bands(first_example)
     
-    # Initialize storage for each band
-    band_embeddings = {band: [] for band in target_bands}
+    # Validate band_combination
+    valid_combinations = ["concat", "avg"] + target_bands
+    if band_combination not in valid_combinations:
+        print(f"Warning: '{band_combination}' not in {valid_combinations}, using first available band")
+        band_combination = target_bands[0] if target_bands else "g"
     
-    # Get batch size from any available embedding field
-    batch_size = None
+    # Step 1: Process each band with TRUE vectorization
+    processed_bands = {}
+
+    print("Processing bands...")
     for band in target_bands:
+        # Extract embeddings for this band from entire batch
         if f"embeddings_{band}" in batch:
-            batch_size = len(batch[f"embeddings_{band}"])
-            break
+            emb_batch = batch[f"embeddings_{band}"]
         elif f"{band}_embedding" in batch:
-            batch_size = len(batch[f"{band}_embedding"])
-            break
-    
-    if batch_size is None:
-        raise ValueError("No embedding data found in batch")
-    
-    # Process each example in the batch
-    for idx in range(batch_size):
-        for band in target_bands:
-            # Try different naming patterns for embeddings
-            emb_raw = None
+            emb_batch = batch[f"{band}_embedding"]
+        else:
+            continue
             
-            # Pattern 1: embeddings_{band} (raw time series)
-            if f"embeddings_{band}" in batch:
-                emb_raw = batch[f"embeddings_{band}"][idx]
-            # Pattern 2: {band}_embedding (pre-computed)
-            elif f"{band}_embedding" in batch:
-                emb_raw = batch[f"{band}_embedding"][idx]
-            
-            if emb_raw is None:
-                print(f"Warning: No embedding data found for band '{band}' at index {idx}, skipping...")
-                continue
-                
-            # Convert to numpy and squeeze
-            emb_array = np.squeeze(np.array(emb_raw, dtype=np.float32))
-            
-            # Handle time dimension averaging for time series embeddings
-            if hand_crafted:
-                # Handcrafted features: use directly
-                avg_emb = emb_array
-            else:
-                # Time series or pre-computed embeddings
-                if emb_array.ndim > 1:
-                    # Time series embeddings: average over time
-                    avg_emb = emb_array.mean(0)
-                else:
-                    # Pre-computed embeddings: use directly
-                    avg_emb = emb_array
-                    
-            band_embeddings[band].append(avg_emb)
+        # TRUE VECTORIZED PROCESSING - no loops!
+        # Convert entire batch to numpy array at once
+        emb_array_batch = np.array(emb_batch, dtype=np.float32)
+        
+        if hand_crafted:
+            # Handcrafted features: use directly (already correct shape)
+            processed_embeddings = emb_array_batch
+        else:
+            # Foundation model embeddings: handle time averaging vectorized
+            if emb_array_batch.ndim == 4:  # Shape: (batch, 1, time, dim)
+                # Remove singleton dimension and average over time for entire batch
+                processed_embeddings = np.mean(emb_array_batch.squeeze(1), axis=1)
+            elif emb_array_batch.ndim == 3:  # Shape: (batch, time, dim)
+                # Average over time dimension for entire batch
+                processed_embeddings = np.mean(emb_array_batch, axis=1)
+            else:  # Shape: (batch, dim) - already processed
+                processed_embeddings = emb_array_batch
+        
+        # Store processed embeddings for this band
+        processed_bands[band] = processed_embeddings
+    print("Finished processing bands.")
+    print("Combining bands...")
+    # Step 2: Combine bands across all examples at once (vectorized!)
+    if len(processed_bands) == 0:
+        raise ValueError("No valid embedding data found for any band")
     
-    # Store processed embeddings in batch format
-    for band in target_bands:
-        if band_embeddings[band]:  # Only add if we have data for this band
-            batch[f'{band}_embedding'] = band_embeddings[band]
+    if band_combination == "concat":
+        # Concatenate all available bands - vectorized across all examples
+        sorted_bands = sorted(processed_bands.keys())
+        combined_embeddings = np.concatenate([processed_bands[band] for band in sorted_bands], axis=1)
+    elif band_combination == "avg":
+        # Element-wise average of all bands - vectorized across all examples
+        band_arrays = list(processed_bands.values())
+        combined_embeddings = np.mean(band_arrays, axis=0)
+    elif band_combination in processed_bands:
+        # Use specific band
+        combined_embeddings = processed_bands[band_combination]
+    else:
+        # Fallback to first available band
+        sorted_bands = sorted(processed_bands.keys())
+        combined_embeddings = processed_bands[sorted_bands[0]]
     
+    # Convert to list format for HuggingFace datasets
+    batch['avg_embedding'] = combined_embeddings.tolist()
     return batch
 
 
@@ -310,76 +374,40 @@ def add_label_indices(dataset, num_proc: int = 4, sort_labels: bool = True):
     return dataset, label2idx, text_labels
 
 
-# Convenience functions for specific use cases
-def prepare_classification_embeddings(example, scenario: str = "avg", hand_crafted: bool = False):
-    """Convenience wrapper for classification tasks."""
-    return process_embeddings(example, scenario=scenario, hand_crafted=hand_crafted, return_separate=True)
+# ==============================================================================
+# SIMPLIFIED INTERFACE - All scripts use these 4 functions only!
+# ==============================================================================
 
-
-def prepare_clustering_embeddings(example, concat: bool = True, hand_crafted: bool = False):
-    """Convenience wrapper for clustering tasks."""
-    scenario = "concat" if concat else "avg"
-    return process_embeddings(example, scenario=scenario, hand_crafted=hand_crafted, return_separate=False)
-
-
-# Legacy functions for backward compatibility (these handle the special clustering case)
-def cal_avg_embedding(example, concat=False, hand_crafted=False, target_bands=None):
-    """
-    Legacy function for clustering - maintains the original interface but with multi-band support.
-    
-    Args:
-        example: Dictionary containing embedding data
-        concat: If True, concatenate bands; if False, average them
-        hand_crafted: Whether the embeddings are handcrafted features
-        target_bands: Specific bands to use (default: auto-detect)
-    
-    Returns:
-        Dictionary with avg_embedding added
-    """
-    # Auto-detect available bands if not specified
-    if target_bands is None:
-        target_bands = get_available_bands(example)
-    
-    # Process embeddings for each available band
-    processed_bands = {}
-    
-    for band in target_bands:
-        # Handle the special clustering data structure
-        emb_raw = None
-        if f'embeddings_{band}' in example:
-            emb_raw = example[f'embeddings_{band}']
-        elif f'{band}_embedding' in example:
-            emb_raw = example[f'{band}_embedding']
-        
-        if emb_raw is None:
-            continue
-            
-        emb_array = np.array(emb_raw)
-        
-        if len(emb_array) == 1:
-            # Single time series case (shape: (1, time_steps, embedding_dim))
-            avg_band_embedding = np.mean(emb_array.squeeze(0), axis=0)
-        else:
-            # Multiple time series or handcrafted features
-            if not hand_crafted:
-                avg_band_embedding = np.mean(emb_array, axis=0)
-            else:
-                avg_band_embedding = emb_array
-        
-        processed_bands[band] = avg_band_embedding
-    
-    # Combine bands according to concat parameter
-    if len(processed_bands) == 0:
-        raise ValueError("No valid embedding data found for any band")
-    
-    if concat:
-        # Concatenate all available bands in sorted order
-        sorted_bands = sorted(processed_bands.keys())
-        avg_embedding = np.concatenate([processed_bands[band] for band in sorted_bands])
+# For clustering script - use this instead of local cal_avg_embedding
+def cal_avg_embedding(example, concat=None, scenario=None, hand_crafted=False, target_bands=None):
+    """For clustering script compatibility - supports both old concat parameter and new scenario parameter."""
+    if scenario is not None:
+        # New scenario-based approach (like classification scripts)
+        band_combination = scenario
+    elif concat is not None:
+        # Old concat boolean approach (for backward compatibility)
+        band_combination = "concat" if concat else "avg"
     else:
-        # Average all available bands
-        band_arrays = list(processed_bands.values())
-        avg_embedding = np.mean(band_arrays, axis=0)
+        # Default to concat if neither specified
+        band_combination = "concat"
+        
+    return compute_embedding(example, band_combination=band_combination, 
+                           hand_crafted=hand_crafted, target_bands=target_bands,
+                           return_format="dict")
+
+# For classification scripts - use this instead of ScenarioDataset logic  
+def get_scenario_embedding(example, scenario, hand_crafted=False, scaler=None, target_bands=None):
+    """For ScenarioDataset compatibility."""
+    return compute_embedding(example, band_combination=scenario, 
+                           hand_crafted=hand_crafted, target_bands=target_bands,
+                           scaler=scaler, return_format="combined")
+
+# For RF script - use lambda functions instead for better performance
+def process_embeddings_batch(batch, band_combination="concat", hand_crafted=False):
+    """
+    For RF script compatibility - now with band combination control like other scripts.
     
-    example['avg_embedding'] = avg_embedding
-    return example
+    RECOMMENDED: Use lambda functions directly instead:
+    dataset.map(lambda example: {"embedding": compute_embedding(example, band_combination="concat")})
+    """
+    return compute_embedding_batch(batch, band_combination=band_combination, hand_crafted=hand_crafted)
