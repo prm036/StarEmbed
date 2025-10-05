@@ -96,10 +96,15 @@ def avg_batch_columns(*cols, column_names=None, band_combination="avg", add_comb
             arr = arr[:, 0]                             # -> (B,T,D)
         assert arr.ndim == 3, f"Unexpected shape for {name}: {arr.shape}"
         
-        # Time-average each band: (B,T,D) -> (B,D)
-        avg_emb = arr.mean(axis=1, dtype=np.float32)
-        out[f"avg_embedding_{band}"] = avg_emb
-        band_arrays[band] = avg_emb
+        if arr.ndim == 3:
+            # Time-average each band: (B,T,D) -> (B,D)
+            avg_emb = arr.mean(axis=1, dtype=np.float32)
+            out[f"avg_embedding_{band}"] = avg_emb
+            band_arrays[band] = avg_emb
+        elif arr.ndim == 2:
+            # Already (B,D), just store directly, this happens for handcrafted feature and random embedding
+            out[f"avg_embedding_{band}"] = arr
+            band_arrays[band] = arr
     
     # Step 2: Create combined embedding if requested
     if add_combined and len(band_arrays) > 0:

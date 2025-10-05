@@ -29,8 +29,8 @@ for BATCH_SIZE in 32; do
     for LR in 1e-4; do
         for DROPOUT in 0.0; do
             for LAYERS in 3; do
-                for see in 100 200; do
-                    CUDA_VISIBLE_DEVICES=0 srun python /xxx/mlp_pl2_wloss_standardization.py --batch_size $BATCH_SIZE --lr $LR --dropout $DROPOUT --hidden_layers $LAYERS --out_dir "/projects/p32795/weijian/skai_universal_forecaster/src/aurora/eval/classification/mlp" --epochs 50 --input_embs $INPUTS --scenario concat --hand_crafted 1 --seed $see
+                for see in 100; do
+                    CUDA_VISIBLE_DEVICES=0 srun python /projects/b1094/StarEmbed/skai_universal_forecaster/src_clean/benchmark/classification/mlp_pl2_wloss_standardization.py --batch_size $BATCH_SIZE --lr $LR --dropout $DROPOUT --hidden_layers $LAYERS --out_dir "/projects/p32795/weijian/skai_universal_forecaster/src/aurora/eval/classification/mlp" --epochs 50 --input_embs $INPUTS --scenario concat --hand_crafted 1 --seed $see
                     # echo "testing $path" # testing
                 done
             done

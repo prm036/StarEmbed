@@ -38,7 +38,7 @@ from benchmark.utils import remove_outliers, add_label_indices, compute_embeddin
 
 # ---------- 0) helpers --------------------------------------------------------
 class ScenarioDataset(Dataset):
-    """Wrap HF dataset to compute per-sample features for band scenarios."""
+    """Wrap HF dataset to use pre-computed combined_embedding for ultra-fast training."""
     def __init__(self, hf_ds, scenario="avg", label_key="label_idx", scaler: Optional[StandardScaler] = None):
         assert scenario in ("concat", "avg", "g", "r")
         self.ds, self.scenario, self.lkey = hf_ds, scenario, label_key
@@ -49,9 +49,15 @@ class ScenarioDataset(Dataset):
     def __getitem__(self, idx):
         rec = self.ds[idx]
         try:
-            # Use main unified embedding function directly (no wrapper needed!)
-            x_np = compute_embedding(rec, band_combination=self.scenario, hand_crafted=False, 
-                                   scaler=self.scaler, return_format="combined")
+            # Use pre-computed combined_embedding for maximum speed
+            if "combined_embedding" in rec:
+                x_np = np.array(rec["combined_embedding"], dtype=np.float32)
+                if self.scaler is not None:
+                    x_np = self.scaler.transform(x_np.reshape(1, -1)).flatten()
+            else:
+                # Fallback to compute_embedding if combined_embedding not available
+                x_np = compute_embedding(rec, band_combination=self.scenario, hand_crafted=False, 
+                                       scaler=self.scaler, return_format="combined")
         except:
             print(f"Error in __getitem__: {idx}")
             print(f"rec: {rec}")
@@ -215,6 +221,13 @@ if __name__ == "__main__":
     DATASET_PATH = args.input_embs
     ds           = remove_outliers(load_from_disk(DATASET_PATH), hand_crafted=bool(args.hand_crafted))
     train_ds, val_ds, test_ds = ds["train"], ds["validation"], ds["test"]
+
+    # Check for pre-computed combined_embedding
+    if len(train_ds) > 0 and "combined_embedding" in train_ds[0]:
+        print("✓ Found pre-computed combined_embedding - using ULTRA FAST mode!")
+    else:
+        print(f"⚠ No combined_embedding found - using slower compute_embedding with scenario '{args.scenario}'")
+        print("  → Consider running compute_avg_embeddings.py first for much better performance")
 
     # Add label indices using unified utility
     ds, label2idx, text_labels = add_label_indices(ds, num_proc=4, sort_labels=True)
