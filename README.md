@@ -1,26 +1,26 @@
 # StarEmbed: Benchmarking Time Series Foundation Models on Astronomical Observations of Variable Starts
 
-**StarEmbed is the first benchmark to test the state-of-the-art TSFMs on stellar time series observations ("light curves").**
+**The first benchmark to test the state-of-the-art TSFMs on stellar time series observations ("light curves").**
 
-A complete benchmark framework for astronomical time series. This repository includes tools for preprocessing raw light curves, generating embeddings (with TSFMs and Astromer), engineering handcrafted features, and evaluating performance on clustering, classification, and out-of-distribution detection.
+A complete benchmark framework for astronomical time series. This repository includes tools for **(1)** preprocessing raw light curves, **(2)** generating embeddings (with TSFMs and Astromer), **(3)** engineering handcrafted features, and **(4)** comprehensive evaluations on clustering, classification, and out-of-distribution detection.
 
 | 🏠[**Benchmark Page**](https://hibb-bb.github.io/star-embed.github.io/) | [**🤗Huggingface Dataset**](https://huggingface.co/datasets/123anonymous123/StarEmbed) | [**📖Paper**](https://arxiv.org/abs/2406.19392) |
 ---
 
 ## **Directory Overview**
 
-### **`datasets/`**
+### **`src/datasets/`**
 Raw light curve preprocessing and data preparation scripts  
 → *See `datasets/README.md` for detailed preprocessing workflows*
 
-### **`model/`** 
+### **`src/model/`** 
 Time series foundation model implementations and embedding generation
-- **Astromer 1/2**: Transformer-based astronomical time series model
+- **Astromer 1&2**: Transformer-based astronomical time series model
 - **Chronos**: Amazon's forecasting foundation model  
 - **Moirai**: Salesforce's universal time series model
 - **`compute_avg_embeddings.py`**: Generate combined embeddings from multi-band data
 
-### **`benchmark/`**
+### **`src/benchmark/`**
 Evaluation pipeline with pre-computed embeddings
 - **Classification**: kNN, Linear models, MLPs, Random Forest with HPO
 - **Clustering**: K-Means, hierarchical clustering, t-SNE visualization  
