@@ -15,7 +15,7 @@ Raw light curve preprocessing and data preparation scripts
 
 ### **`model/`** 
 Time series foundation model implementations and embedding generation
-- **Astromer**: Transformer-based astronomical time series model
+- **Astromer 1/2**: Transformer-based astronomical time series model
 - **Chronos**: Amazon's forecasting foundation model  
 - **Moirai**: Salesforce's universal time series model
 - **`compute_avg_embeddings.py`**: Generate combined embeddings from multi-band data
@@ -26,11 +26,9 @@ Evaluation pipeline with pre-computed embeddings
 - **Clustering**: K-Means, hierarchical clustering, t-SNE visualization  
 → *See `benchmark/README.md` for complete evaluation workflows*
 
-### **`output/`**
-Results storage for all experiments and evaluations
 
 ### **`bash_script/`**
-SLURM job scripts and automation for high-performance computing
+job scripts for evaluation with hyperparameter search and multi-run script
 
 
 ---
@@ -44,13 +42,4 @@ SLURM job scripts and automation for high-performance computing
 
 ---
 
-## **Key Features**
-
-✅ **First systematic benchmark** of TSFMs on astronomical data  
-✅ **Multi-model support**: Astromer, Chronos, Moirai, traditional methods  
-✅ **Optimized pipeline**: Pre-computed embeddings for 10x performance gain  
-✅ **Comprehensive evaluation**: Classification, clustering, OOD detection  
-✅ **HPC ready**: SLURM integration for large-scale experiments  
-
----
 
