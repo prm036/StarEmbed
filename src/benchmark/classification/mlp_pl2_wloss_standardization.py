@@ -193,7 +193,7 @@ if __name__ == "__main__":
     parser.add_argument("--patience", type=int, default=3)
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--out_dir", type=str, default="sweep_results")
-    parser.add_argument("--input_embs", type=str, default="/projects/b1094/StarEmbed/embeddings/csdr1_raw4_catflags_filtered_embs_hand_crafted_trn_val_tst_bandgr")
+    parser.add_argument("--input_embs", type=str, default="/path/to/embeddings/csdr1_raw4_catflags_filtered_embs_hand_crafted_trn_val_tst_bandgr")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--hand_crafted", type=int, default=0)
     parser.add_argument("--standardize", type=int, default=1, help="Use StandardScaler (fit on train only)")

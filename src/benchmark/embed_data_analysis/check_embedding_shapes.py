@@ -15,7 +15,7 @@ datasets = [
     "csdr1_raw_embs_moiral_small_trn_val_tst_ctx200_pdt64_psz16_bandgr"
 ]
 
-base_path = "/projects/b1094/StarEmbed/embeddings/embeddings_with_anom"
+base_path = "/path/to/embeddings/embeddings_with_anom"
 
 for dataset_name in datasets:
     print(f"\n{'='*60}")

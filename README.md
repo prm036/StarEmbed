@@ -54,4 +54,3 @@ SLURM job scripts and automation for high-performance computing
 
 ---
 
-**Project**: [StarEmbed](https://hibb-bb.github.io/star-embed.github.io/) | **Institution**: Northwestern University | **Collaborators**: SkAI Institute, CIERA, CMFG

@@ -157,7 +157,7 @@ if __name__ == "__main__":
                        choices=["concat", "avg", "g", "r", "i", "z"],
                        help="How to combine embeddings: concat, avg, or specific band (ignored if combined_embedding exists)")
     parser.add_argument("--input_embs", type=str, 
-                       default="/projects/b1094/StarEmbed/embeddings/descriptive_name_embeddings/csdr1_raw_embs_moiral_small_trn_val_tst_ctx200_pdt64_psz16_bandgr")
+                       default="/path/to/embeddings/descriptive_name_embeddings/csdr1_raw_embs_moiral_small_trn_val_tst_ctx200_pdt64_psz16_bandgr")
     parser.add_argument("--out_dir", type=str, default=f"linear_results")
     parser.add_argument("--hand_crafted", type=bool, default=False)
     parser.add_argument("--k", type=int, default=5, help="k for kNN")
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     np.random.seed(args.seed)
 
     # Create output directory under the specified base path
-    base_output_dir = "/projects/b1094/StarEmbed/src/output/linear_classification/new_avg_embedding"
+    base_output_dir = "/path/to/output/linear_classification/new_avg_embedding"
     experiment_name = f"{args.input_embs.split('/')[-1]}_{args.scenario}_seed{args.seed}"
     args.out_dir = os.path.join(base_output_dir, experiment_name)
 

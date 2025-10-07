@@ -10,8 +10,8 @@ Process: Filters by band and length, normalizes time series data,
 generates embeddings using Chronos T5/Bolt models.
 
 Usage:
-  python create_chronos_embeddings.py --ctx 64 --model t5
-  python create_chronos_embeddings.py --ctx 128 --model bolt
+  python embed.py --ctx 64 --model t5
+  python embed.py --ctx 128 --model bolt
 """
 
 import pandas as pd
@@ -111,7 +111,7 @@ def main():
 
     print("Loading MACHO dataset...")
     # Load dataset
-    dataset = datasets.load_from_disk('/projects/p32795/hongyu/hf_macho_70-10-20')
+    dataset = datasets.load_from_disk('/path/to/lc_train_test_val_split')
 
     dataset_dict = {}
     if isinstance(dataset, datasets.DatasetDict):
@@ -145,7 +145,7 @@ def main():
             desc="Generating embeddings"
         )
 
-    output_path = f"/projects/p32795/hongyu/csdr1_raw4_catflags_filtered_embs_chronos_tiny_macho_ctx{ctx}_band{band}"
+    output_path = f"/path/to/csdr1_raw4_catflags_filtered_embs_chronos_tiny_macho_ctx{ctx}_band{band}"
 
     print(f"Saving dataset with embeddings to {output_path}")
     dataset_to_save.save_to_disk(output_path)

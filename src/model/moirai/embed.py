@@ -339,7 +339,7 @@ if __name__ == "__main__":
     parser.add_argument("--ctx", type=int, default=64)
     parser.add_argument("--split", type=str, default='test')
     parser.add_argument("--model", type=str, default='moirai')
-    parser.add_argument("--dataset_path", type=str, required=True, default='/projects/p32795/hongyu/hf_csdr1_multiband_raw_lc_minority_class_str_v2')
+    parser.add_argument("--dataset_path", type=str, required=True, default='/path/to/lc_train_test_val_split')
     args = parser.parse_args()
     ctx = args.ctx
     pdt = 64
@@ -398,7 +398,7 @@ if __name__ == "__main__":
         dataset_dict[split] = updated_dataset
     # Save the updated dataset
     # output_path = f"csdr1_raw_embs_moiral_small_trn_val_tst_ctx{ctx}_pdt{pdt}_psz{psz}_band{band}"
-    output_path = f"/projects/p32795/hongyu/csdr1_minority_raw_embs_moiral_small_trn_val_tst_ctx{ctx}_pdt{pdt}_psz{psz}_band{band}"
+    output_path = f"/path/to/csdr1_minority_raw_embs_moiral_small_trn_val_tst_ctx{ctx}_pdt{pdt}_psz{psz}_band{band}"
     print(f"Saving dataset with embeddings to {output_path}")
     dataset_to_save = datasets.DatasetDict(dataset_dict)
     dataset_to_save.save_to_disk(output_path)

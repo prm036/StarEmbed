@@ -9,7 +9,7 @@ Before running any benchmark scripts, install the required packages:
 
 ```bash
 # Navigate to benchmark directory
-cd /projects/b1094/StarEmbed/skai_universal_forecaster/src_clean/benchmark
+cd /src/benchmark
 
 # Install minimal requirements (recommended)
 pip install -r requirements.txt
@@ -31,32 +31,6 @@ The pipeline consists of two main stages:
 Raw Dataset → compute_avg_embeddings.py → Combined Embeddings → Benchmark Scripts
 ```
 
-### **Performance Benefits**
-- **10x+ speedup** over on-the-fly embedding computation  
-- **Memory efficient** with direct numpy array access
-- **Consistent results** across all benchmark methods
-
----
-
-## **Directory Structure**
-
-```
-src_clean/
-├── model/
-│   ├── astromer_1/                  # Astromer model embeddings
-│   ├── astromer_2/                  # Astromer model embeddings  
-│   ├── chronos/                     # Chronos model embeddings
-│   ├── moirai/                      # Moirai model embeddings
-│   └── compute_avg_embeddings.py    # Step 1: Preprocessing (works with all models)
-├── benchmark/
-│   ├── classification/
-│   │   ├── linear_knn.py            # Step 2a: Logistic Regression + kNN
-│   │   ├── mlp_pl2_wloss_standardization.py  # Step 2b: MLP with PyTorch Lightning
-│   │   └── rf_hpo.py               # Step 2c: Random Forest with HPO
-│   └── clustering/
-│       └── clustering.py            # Step 2d: K-Means, Hierarchical + t-SNE
-└── README.md                       # This file
-```
 
 ---
 
@@ -66,7 +40,7 @@ src_clean/
 
 ### **Usage**
 ```bash
-cd /projects/b1094/StarEmbed/skai_universal_forecaster/src_clean/model
+cd /src/model
 
 # Basic usage (automatically detects available bands)
 python compute_avg_embeddings.py \
@@ -222,6 +196,26 @@ python clustering.py \
 
 **Outputs**: Clustering metrics (ARI, NMI, F1), t-SNE plots, dendrograms
 
+---
+
+### **2e. Out-of-Distribution (OOD) Detection**
+
+**Purpose**: Detect anomalies and out-of-distribution samples in stellar embeddings.
+
+```bash
+cd ../ood
+
+python AD_test.py \
+    --input_embs /path/to/dataset \
+    --seed 42
+```
+
+**Key Parameters**:
+- `--input_embs`: Path to dataset with `combined_embedding`
+- `--seed`: Random seed for reproducibility
+
+**Outputs**: Anomaly detection scores, OOD detection metrics
+
 
 
 ---
@@ -235,10 +229,10 @@ python clustering.py \
 
 
 ### **Output Locations**
-- Linear classifier: `/projects/b1094/StarEmbed/src/output/linear_classification/`
+- Linear classifier: `/src/output/linear_classification/`
 - MLP: Working directory + experiment name
 - Random Forest: `--output-dir` parameter  
-- Clustering: `/projects/b1094/StarEmbed/src/output/clustering/`
+- Clustering: `/src/output/clustering/`
 
 ### **GPU Usage**
 - Linear Classifier: CPU only
