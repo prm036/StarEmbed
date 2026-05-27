@@ -1,4 +1,4 @@
-# StarEmbed: Benchmarking Time Series Foundation Models on Astronomical Observations of Variable Starts
+# StarEmbed: Benchmarking Time Series Foundation Models on Astronomical Observations of Variable Starts (ICML 2026)
 
 **The first benchmark to test the state-of-the-art TSFMs on stellar time series observations ("light curves").**
 
@@ -6,6 +6,10 @@ A complete benchmark framework for astronomical time series. This repository inc
 
 | 🏠[**Benchmark Page**](https://hibb-bb.github.io/star-embed.github.io/) | [**🤗Huggingface Dataset**](https://huggingface.co/datasets/123anonymous123/StarEmbed) | [**📖Paper**](https://arxiv.org/abs/2510.06200) |
 ---
+
+## **News**
+- **[05.25.2026]** StarEmbed is accepted to [ICML 2026 Workshop on AI for Physics](https://ai4physics-workshop.github.io/), come and chat with us!
+- **[04.30.2026]** StarEmbed is accepted to [ICML 2026](https://icml.cc/Conferences/2026), see you in Seoul!
 
 ## **Directory Overview**
 
