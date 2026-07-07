@@ -316,7 +316,7 @@ if __name__ == "__main__":
         trainer.fit(lit_model, dm)
 
         best_ckpt = ckpt_cb.best_model_path
-        single_gpu_tester = pl.Trainer(accelerator="gpu", devices=1, logger=False)
+        single_gpu_tester = pl.Trainer(accelerator="auto", devices="auto", logger=False)
         single_gpu_tester.test(lit_model, datamodule=dm, ckpt_path=best_ckpt)
 
         # ---------- post-processing metrics/plots ----------

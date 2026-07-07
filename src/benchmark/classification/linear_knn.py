@@ -169,8 +169,8 @@ if __name__ == "__main__":
     np.random.seed(args.seed)
 
     # Create output directory under the specified base path
-    base_output_dir = "/path/to/output/linear_classification/new_avg_embedding"
-    experiment_name = f"{args.input_embs.split('/')[-1]}_{args.scenario}_seed{args.seed}"
+    base_output_dir = args.out_dir
+    experiment_name = f"{args.input_embs.rstrip('/').split('/')[-1]}_{args.scenario}_seed{args.seed}"
     args.out_dir = os.path.join(base_output_dir, experiment_name)
 
     os.makedirs(args.out_dir, exist_ok=True)
