@@ -1,0 +1,50 @@
+{
+  "csdr1_kimi_suite_embs_trn_val_tst_bandgr": {
+    "embedding_path": "./embeddings/csdr1_kimi_suite_embs_trn_val_tst_bandgr",
+    "best_params": {
+      "max_depth": 30,
+      "min_samples_split": 10,
+      "n_estimators": 100
+    },
+    "best_cv_score": 0.7864691890340112,
+    "hpo_skipped": false,
+    "seeds_used": [
+      42,
+      100,
+      200
+    ],
+    "main_seed": 42,
+    "metrics": {
+      "f1_mean": 0.7771119963147863,
+      "f1_std": 0.0011435036531186132,
+      "accuracy_mean": 0.9156626506024096,
+      "accuracy_std": 0.00035468919141878235,
+      "precision_mean": 0.8704686509953796,
+      "precision_std": 0.0003969572144450359,
+      "recall_mean": 0.7302578788780445,
+      "recall_std": 0.0014371520822743385
+    },
+    "individual_results": {
+      "f1_scores": [
+        0.7772722027283622,
+        0.7784255040062876,
+        0.7756382822097093
+      ],
+      "accuracies": [
+        0.9160240963855422,
+        0.9151807228915663,
+        0.9157831325301204
+      ],
+      "precisions": [
+        0.870932652049495,
+        0.8705103104973447,
+        0.869962990439299
+      ],
+      "recalls": [
+        0.7301193998085578,
+        0.732083172746191,
+        0.7285710640793848
+      ]
+    }
+  }
+}

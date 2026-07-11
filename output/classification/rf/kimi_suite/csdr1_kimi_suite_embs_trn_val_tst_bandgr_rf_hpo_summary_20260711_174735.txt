@@ -1,0 +1,14 @@
+Random Forest Results
+============================================================
+
+Embedding: csdr1_kimi_suite_embs_trn_val_tst_bandgr
+Path: ./embeddings/csdr1_kimi_suite_embs_trn_val_tst_bandgr
+Best CV Score: 0.7865
+Best Params: {'max_depth': 30, 'min_samples_split': 10, 'n_estimators': 100}
+Test Metrics (mean ± std):
+  F1:        0.7771 ± 0.0011
+  Accuracy:  0.9157 ± 0.0004
+  Precision: 0.8705 ± 0.0004
+  Recall:    0.7303 ± 0.0014
+----------------------------------------
+

@@ -1,0 +1,14 @@
+Random Forest Results
+============================================================
+
+Embedding: csdr1_star_suite_embs_trn_val_tst_bandgr
+Path: ./embeddings/csdr1_star_suite_embs_trn_val_tst_bandgr
+Best CV Score: 0.8578
+Best Params: {'max_depth': 20, 'min_samples_split': 2, 'n_estimators': 200}
+Test Metrics (mean ± std):
+  F1:        0.8420 ± 0.0014
+  Accuracy:  0.9478 ± 0.0002
+  Precision: 0.9145 ± 0.0028
+  Recall:    0.8116 ± 0.0020
+----------------------------------------
+

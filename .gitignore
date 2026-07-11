@@ -3,7 +3,7 @@ data/**
 !data/
 !data/.gitkeep
 others/**
-
+new/**
 # Weights & Biases
 wandb/
 *.wandb
