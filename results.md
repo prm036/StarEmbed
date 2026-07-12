@@ -46,66 +46,15 @@ The `kimi` (Kimi-2.5) and `agentic` (Gemini-3.1-pro) matrices are the exact **3-
 
 ### 📊 Visual Heatmaps
 ![Side-by-Side All Classifiers Confusion Matrices](output/plots/side_by_side_all_classifiers_4x3.png)
-- **High-Res Vector Figure**: [side_by_side_all_classifiers_4x3.pdf](output/plots/side_by_side_all_classifiers_4x3.pdf)
-- **High-Res PNG**: [side_by_side_all_classifiers_4x3.png](output/plots/side_by_side_all_classifiers_4x3.png)
 
----
-
-### 🔢 Exact Normalized Proportions by Class (Averaged Across Seeds)
-
-#### RF Classifier
-| True Class | RF + HF (Fig. 10) | RF + kimi | RF + agentic |
-| :--- | :---: | :---: | :---: |
-| **`EA`** | `**0.887**` | `0.842` | `0.872` |
-| **`EW`** | `0.960` | `0.965` | `**0.978**` |
-| **`LPV`** | `0.876` | `0.659` | `**0.909**` |
-| **`RRab`** | `0.906` | `0.879` | `**0.932**` |
-| **`RRc`** | `0.873` | `0.872` | `**0.966**` |
-| **`RRd`** | `**0.302**` | `0.246` | `0.265` |
-| **`RS CVn`** | `0.604` | `0.649` | `**0.759**` |
-
-#### k-NN Classifier
-| True Class | k-NN + HF (Fig. 10) | k-NN + kimi | k-NN + agentic |
-| :--- | :---: | :---: | :---: |
-| **`EA`** | `**0.850**` | `0.819` | `0.751` |
-| **`EW`** | `0.962` | `0.923` | `**0.968**` |
-| **`LPV`** | `0.829` | `0.620` | `**0.848**` |
-| **`RRab`** | `0.733` | `0.682` | `**0.778**` |
-| **`RRc`** | `0.740` | `0.794` | `**0.847**` |
-| **`RRd`** | `0.229` | `0.091` | `**0.250**` |
-| **`RS CVn`** | `0.284` | `0.367` | `**0.598**` |
-
-#### MLP Classifier
-| True Class | MLP + HF (Fig. 10) | MLP + kimi | MLP + agentic |
-| :--- | :---: | :---: | :---: |
-| **`EA`** | `**0.957**` | `0.918` | `0.944` |
-| **`EW`** | `0.816` | `0.837` | `**0.854**` |
-| **`LPV`** | `0.906` | `**0.989**` | `0.967` |
-| **`RRab`** | `0.884` | `0.802` | `**0.889**` |
-| **`RRc`** | `0.804` | `**0.838**` | `0.814` |
-| **`RRd`** | `**0.748**` | `0.511` | `0.716` |
-| **`RS CVn`** | `0.847` | `0.811` | `**0.861**` |
-
-#### Logistic Classifier
-| True Class | Logistic + HF (Fig. 10) | Logistic + kimi | Logistic + agentic |
-| :--- | :---: | :---: | :---: |
-| **`EA`** | `**0.950**` | `0.907` | `0.947` |
-| **`EW`** | `0.825` | `0.818` | `**0.888**` |
-| **`LPV`** | `0.843` | `**0.891**` | `0.891` |
-| **`RRab`** | `0.894` | `0.846` | `**0.896**` |
-| **`RRc`** | `0.784` | `0.719` | `**0.800**` |
-| **`RRd`** | `**0.807**` | `0.750` | `0.761` |
-| **`RS CVn`** | `0.876` | `0.851` | `**0.879**` |
-
----
 
 ## Clustering t-SNE Graphs (Side-by-Side Comparison)
 
 Comparison of unsupervised feature space separation across all **41,492 variable stars** in the combined dataset.
 
-| Feature Suite / Model | t-SNE Projection Preview | Vector PDF Document |
-| :--- | :---: | :---: |
-| **Hand-crafted Features (Baseline)** | ![HF Baseline t-SNE](output/plots/tsne_HF_Baseline.png) | [t-SNE-on-Combined-Dataset.pdf](output/clustering/all_split_all_standardize/csdr1_raw4_catflags_filtered_embs_hand_crafted_trn_val_tst_bandgr_all_c1_std1_p30.0_seed42/t-SNE-on-Combined-Dataset.pdf) |
-| **kimi (Kimi-2.5 — 102 Features)** | ![kimi t-SNE](output/plots/tsne_kimi_Kimi_2.5.png) | [t-SNE-on-Combined-Dataset.pdf](output/clustering/kimi_suite/csdr1_kimi_suite_embs_trn_val_tst_bandgr_all_concat_std1_p30.0_seed42/t-SNE-on-Combined-Dataset.pdf) |
-| **agentic (Gemini-3.1-pro — 222 Features)** | ![agentic t-SNE](output/plots/tsne_agentic_Gemini_3.1_pro.png) | [t-SNE-on-Combined-Dataset.pdf](output/clustering/star_suite_all/csdr1_star_suite_embs_trn_val_tst_bandgr_all_concat_std1_p30.0_seed42/t-SNE-on-Combined-Dataset.pdf) |
+| Feature Suite / Model | t-SNE Projection Preview |
+| :--- | :---: |
+| **Hand-crafted Features (Baseline)** | ![HF Baseline t-SNE](output/plots/tsne_HF_Baseline.png) |
+| **kimi (Kimi-2.5 — 102 Features)** | ![kimi t-SNE](output/plots/tsne_kimi_Kimi_2.5.png) |
+| **agentic (Gemini-3.1-pro — 222 Features)** | ![agentic t-SNE](output/plots/tsne_agentic_Gemini_3.1_pro.png) |
 
